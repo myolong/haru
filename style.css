@@ -98,3 +98,21 @@ button.choice span { display: block; font-weight: 400; font-size: 12.5px; color:
 .tabs { display: flex; gap: 6px; margin: 0 0 10px; }
 .tabs button { margin: 0; padding: 9px 4px; font-size: 14px; background: #f3dfbd; color: #6b4022; }
 .tabs button.on { background: #8a3b12; color: #fff; }
+
+/* 엔딩 카드 */
+.endpanel { padding: 14px 14px 12px; }
+#endCard { width: 100%; height: auto; display: block; border-radius: 18px; }
+#endText { margin: 8px 0 0; text-align: center; }
+.row2 { display: flex; gap: 8px; }
+.row2 button { flex: 1; }
+
+/* 첫 화면 성장 단계 */
+.road { display: flex; align-items: stretch; justify-content: center; gap: 1px; margin: 12px -6px 4px; }
+.road .step { flex: 1; min-width: 0; padding: 6px 1px; border-radius: 10px; background: #f6e7cb; opacity: .75; }
+.road .step .ri { font-size: 20px; line-height: 1.2; }
+.road .step b { display: block; font-size: 10.5px; color: #6b4022; white-space: nowrap; letter-spacing: -.5px; }
+.road .step span { display: block; font-size: 9px; color: #9a7a5a; line-height: 1.2; margin-top: 2px; word-break: keep-all; }
+.road .step.done { background: #e2f2d6; opacity: 1; }
+.road .step.now { background: #ffd36a; opacity: 1; box-shadow: 0 0 0 2px #d9541e inset; }
+.road .arr { align-self: center; color: #c9883f; font-weight: 800; font-size: 13px; }
+.roadnote { font-size: 12px; color: #8a6a4a; margin-top: 6px; line-height: 1.45; }
