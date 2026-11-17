@@ -160,6 +160,7 @@ function resize() {
   cv.style.height = (H * scale) + 'px';
   cv.width = Math.round(W * scale * dpr);
   cv.height = Math.round(H * scale * dpr);
+  if (window.Street) Street.resize();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -261,6 +262,7 @@ function spawnCustomer() {
     skin: SKINS[Math.random() * SKINS.length | 0], hair: HAIRS[Math.random() * HAIRS.length | 0],
     coat: COATS[Math.random() * COATS.length | 0], hat: Math.random() < .4, bob: Math.random() * 6,
   };
+  if (window.Street) Street.arrive();
 }
 
 function trayCount(t) { return G.tray.filter(b => b.type === t).length; }
@@ -293,6 +295,7 @@ function serve(slot) {
   c.mood = avg >= 2.5 ? 'happy' : avg >= 1.8 ? 'ok' : 'meh';
   const lines = c.mood === 'happy' ? HAPPY_LINES : c.mood === 'ok' ? OK_LINES : MEH_LINES;
   c.line = lines[Math.random() * lines.length | 0]; c.lineT = 1.6;
+  if (window.Street) Street.leave(c.mood);
   float(CUST_X[slot], 140, '+' + (money + tip).toLocaleString() + '원' + (tip ? ' (팁!)' : ''), '#ffe27a');
   sfx.coin();
 }
@@ -468,6 +471,7 @@ function update(dt) {
     if (c.patience <= 0) {
       c.leave = 0.001; c.mood = 'angry'; c.line = '너무 오래 걸려요!'; c.lineT = 1.4;
       G.stats.angry++; sfx.bad();
+      if (window.Street) Street.leave('angry');
     }
   }
 
@@ -627,6 +631,62 @@ function drawBackground() {
     const x = (i * 97 + tt * (8 + i % 5 * 3)) % W;
     const y = (i * 53 + tt * (18 + i % 4 * 6)) % 280;
     ctx.beginPath(); ctx.arc(x, y + 10, 1.2 + (i % 3) * .5, 0, 7); ctx.fill();
+  }
+}
+
+// 골목을 지나가는 사람들(손님 뒤, 카운터 너머)
+const walkers = [];
+function festiveMonth() { const m = calOf(save.day).month; return m >= 11 || m <= 2; }
+function stepWalkers(dt) {
+  for (const p of walkers) { p.x += p.dir * p.v * dt; p.ph += dt * p.v / 6; }
+  for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].x < -40 || walkers[i].x > W + 40) walkers.splice(i, 1);
+  if (walkers.length < 4 && Math.random() < dt * .7) {
+    const dir = Math.random() < .5 ? 1 : -1;
+    walkers.push({ x: dir > 0 ? -30 : W + 30, dir, v: 22 + Math.random() * 16, ph: 0, far: Math.random() < .5,
+      coat: COATS[Math.random() * COATS.length | 0], skin: SKINS[Math.random() * SKINS.length | 0],
+      hair: HAIRS[Math.random() * HAIRS.length | 0], santa: festiveMonth() && Math.random() < .3,
+      bag: Math.random() < .4 ? (Math.random() < .5 ? '#d6402a' : '#e9d6b0') : null });
+  }
+}
+function drawWalkers() {
+  // 연말 전구줄
+  if (festiveMonth()) {
+    const BL = ['#ff5a4a', '#ffd34a', '#5ad46a', '#5ab4ff', '#ff8ad8'];
+    const t = performance.now() / 1000;
+    for (let r = 0; r < 2; r++) {
+      const y0 = (save.shop ? 96 : 82) + r * 34 + DY * 0;
+      ctx.strokeStyle = 'rgba(20,20,30,.7)'; ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let i = 0; i <= 20; i++) { const u = i / 20; const yy = y0 + Math.sin(u * Math.PI) * 18; i ? ctx.lineTo(u * W, yy) : ctx.moveTo(0, yy); }
+      ctx.stroke();
+      for (let i = 1; i < 16; i++) {
+        const u = i / 16, x = u * W, y = y0 + Math.sin(u * Math.PI) * 18 + 3;
+        const b = .55 + .45 * Math.sin(t * 2.4 + i * 1.7 + r * 2);
+        ctx.fillStyle = BL[(i + r * 2) % BL.length];
+        ctx.globalAlpha = .25 * b; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill();
+        ctx.globalAlpha = .6 + .4 * b; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  for (const p of walkers) {
+    const s = p.far ? .5 : .62, foot = p.far ? 284 : 292;
+    const x = p.x, st = Math.sin(p.ph);
+    ctx.save(); ctx.globalAlpha = p.far ? .75 : .9;
+    ctx.strokeStyle = '#2a2a36'; ctx.lineWidth = 7 * s; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x, foot - 34 * s); ctx.lineTo(x + st * 9 * s, foot); ctx.moveTo(x, foot - 34 * s); ctx.lineTo(x - st * 9 * s, foot); ctx.stroke();
+    const by = foot - 30 * s;
+    ctx.fillStyle = p.coat; rr(x - 17 * s, by - 52 * s, 34 * s, 56 * s, 13 * s); ctx.fill();
+    if (p.bag) { ctx.fillStyle = p.bag; ctx.fillRect(x + p.dir * 8 * s - 8 * s, by - 18 * s, 16 * s, 18 * s); }
+    ctx.fillStyle = '#e8e2d0'; rr(x - 13 * s, by - 58 * s, 26 * s, 9 * s, 4 * s); ctx.fill();
+    const hy = by - 72 * s;
+    ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x, hy, 14 * s, 0, 7); ctx.fill();
+    ctx.fillStyle = p.hair; ctx.beginPath(); ctx.arc(x - p.dir * 2 * s, hy - 3 * s, 14.5 * s, Math.PI, Math.PI * 2); ctx.fill();
+    if (p.santa) {
+      ctx.fillStyle = '#c94a3a'; ctx.beginPath(); ctx.moveTo(x - 14 * s, hy - 6 * s); ctx.lineTo(x + 14 * s, hy - 6 * s); ctx.lineTo(x - p.dir * 16 * s, hy - 30 * s); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - p.dir * 16 * s, hy - 30 * s, 4 * s, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = '#2a1a12'; ctx.beginPath(); ctx.arc(x + p.dir * 6 * s, hy + 1, 1.5, 0, 7); ctx.arc(x + p.dir * 11 * s, hy + 1, 1.5, 0, 7); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -972,6 +1032,7 @@ function draw() {
   ctx.clearRect(0, 0, W, H);
   drawBackground();
   drawStall();
+  drawWalkers();
   if (!G) { ctx.save(); ctx.translate(0, DY); drawCounter(); ctx.restore(); return; }
   // 손님
   for (let s = 0; s < 3; s++) if (G.customers[s]) drawCustomer(s, G.customers[s]);
@@ -1033,6 +1094,8 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   update(dt);
+  stepWalkers(dt);
+  if (window.Street) Street.setSeason(calOf(save.day).month, seasonOf(save.day).snow);
   draw();
   requestAnimationFrame(loop);
 }
@@ -1476,14 +1539,17 @@ function updatePanels() {
     }
     R += `<div class="pcbox"><h3>📋 주문 현황</h3>${ord}${save.upg.alba ? `<div class="sub" style="margin-top:6px">🧑‍🍳 알바 ${save.upg.alba}명이 5초마다 굽는 중</div>` : ''}</div>`;
   }
-  R += `<div class="pcbox keys"><h3>⌨️ 단축키</h3>
-    <div><kbd>1</kbd>~<kbd>5</kbd> 반죽·팥·슈크림·초코·피자</div>
-    <div><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 틀 (누르고 있으면 반죽)</div>
-    <div><kbd>Space</kbd> 덮기·뒤집기·꺼내기 (마지막 틀)</div>
-    <div><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 손님에게 건네기</div>
-    <div><kbd>P</kbd> 잠깐 쉬기</div></div>`;
+  R += `<div class="pcbox keys${keysOpen ? ' open' : ''}"><h3>⌨️ 단축키 <span class="sub">${keysOpen ? '(H 닫기)' : '(H 열기)'}</span></h3>
+    <div class="hide"><kbd>1</kbd>~<kbd>5</kbd> 반죽·팥·슈크림·초코·피자</div>
+    <div class="hide"><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 틀 (누르고 있으면 반죽)</div>
+    <div class="hide"><kbd>Space</kbd> 덮기·뒤집기·꺼내기 (마지막 틀)</div>
+    <div class="hide"><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 손님에게 건네기</div>
+    <div class="hide"><kbd>P</kbd> 잠깐 쉬기</div></div>`;
   $('pcRight').innerHTML = R;
 }
+let keysOpen = false;
+$('pcRight').addEventListener('click', e => { if (e.target.closest('.keys h3')) { keysOpen = !keysOpen; updatePanels(); } });
+document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'h' && isPC) { keysOpen = !keysOpen; updatePanels(); } });
 setInterval(updatePanels, 300);
 
 // 시험용
