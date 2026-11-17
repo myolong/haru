@@ -40,7 +40,14 @@ function calOf(day) {
   return { year: 1 + Math.floor(mi / 12), month: (mi % 12) + 1, week: (w % 4) + 1 };
 }
 function calLabel(day) { const c = calOf(day); return c.month + '월 ' + c.week + '주'; }
+// 신메뉴 연구 결과가 계절 손님을 바꿔요
 function seasonOf(day) {
+  const se = seasonBase(day), r = (typeof save !== 'undefined' && save.research) || {};
+  if (r.ice && se.mult < 0.8) { se.mult = Math.max(se.mult, 0.8); se.line = '아이스 붕어빵 덕분에 더워도 손님이 와요.'; }
+  if (r.goguma && se.snow) { se.mult = 1.15; se.line = '군고구마 붕어빵까지! 겨울 손님이 가장 많아요.'; }
+  return se;
+}
+function seasonBase(day) {
   const m = calOf(day).month;
   if (m === 12 || m <= 2) return { name: '겨울', tag: '성수기', icon: '❄️', mult: 1, snow: true, line: '붕어빵 찾는 손님이 가장 많아요.' };
   if (m === 11) return { name: '늦가을', tag: '', icon: '🍂', mult: 0.9, snow: false, line: '찬 바람이 불기 시작해요. 붕어빵 철이 다가와요.' };
@@ -135,7 +142,7 @@ function branchWeek(b, day, steady) {
   if (e.closeBranches) return { sales: 0, cost: 0, rent: a.rent, wage: 0, net: -a.rent, closed: true };
   let sales = Math.round(30000 * a.traffic * sm * (0.6 + 0.1 * b.mgr.skill) * ratingF * fameBoost() * (steady ? 1 : 0.9 + Math.random() * 0.2) * e.rate / 10) * 10;
   sales = Math.round(sales * (1 - e.fee) / 10) * 10;
-  const cost = Math.round(sales * 0.3 / 10) * 10;
+  const cost = Math.round(sales * 0.3 * (1 - factoryCut()) / 10) * 10;
   return { sales, cost, rent: a.rent, wage: b.mgr.wage, net: sales - cost - a.rent - b.mgr.wage };
 }
 function loanLimit() { return 100000 + 50000 * save.branches.length + (save.shop ? 50000 : 0) + (save.hq ? 200000 + 20000 * save.franchises.length : 0); }
@@ -154,7 +161,7 @@ function fameBoost() { return 1 + Math.min(save.fame || 0, 100) / 400; }
 function makeApplicants() {
   const fame = save.fame || 0;
   let n = Math.floor(fame / 30) + (save.rating >= 4.3 ? 1 : 0);
-  n = Math.max(0, Math.min(3, n + (Math.random() < .5 ? 0 : -1)));
+  n = Math.max(0, Math.min(3 + (save.factory || 0), n + (Math.random() < .5 ? 0 : -1)));
   const list = [];
   for (let i = 0; i < n; i++) {
     const a = AREAS[Math.random() * AREAS.length | 0];
@@ -162,12 +169,27 @@ function makeApplicants() {
   }
   return list;
 }
+// ===== 4차: 반죽 공장·신메뉴 연구·해외 진출·엔딩 =====
+const FACTORY_COSTS = [300000, 600000, 1000000];
+const RESEARCH = [
+  { id: 'goguma', icon: '🍠', name: '군고구마 붕어빵', cost: 120000, weeks: 2, desc: '겨울 손님 +15%' },
+  { id: 'ice', icon: '🍦', name: '아이스 붕어빵', cost: 150000, weeks: 3, desc: '여름·봄 손님이 줄지 않아요(최소 80%)' },
+  { id: 'premium', icon: '✨', name: '프리미엄 반죽', cost: 200000, weeks: 3, desc: '모든 붕어빵 값 +15%' },
+];
+const OVERSEAS = [
+  { id: 'hanoi', icon: '🇻🇳', name: '베트남 하노이', cost: 300000, income: 15000 },
+  { id: 'tokyo', icon: '🇯🇵', name: '일본 도쿄', cost: 600000, income: 30000 },
+  { id: 'la', icon: '🇺🇸', name: '미국 LA', cost: 1000000, income: 50000 },
+  { id: 'paris', icon: '🇫🇷', name: '프랑스 파리', cost: 1500000, income: 75000 },
+];
+const OVERSEAS_NEED = 20, CHAIRMAN_NEED = 100;
+function factoryCut() { return 0.15 * (save.factory || 0); }
 // 가맹점 한 곳의 이번 주 매출과 로열티
 function franchiseWeek(f, day, steady) {
   const a = areaOf(f.area), se = seasonOf(day);
   const ratingF = 0.7 + Math.min(5, save.rating) * 0.08;
   const sales = Math.round(80000 * a.traffic * se.mult * (0.7 + 0.08 * f.skill) * ratingF * fameBoost() * (steady ? 1 : 0.9 + Math.random() * 0.2) * eff().rate / 10) * 10;
-  return { sales, royalty: Math.round(sales * (save.royalty || 8) / 100 / 10) * 10 };
+  return { sales, royalty: Math.round(sales * (save.royalty || 8) / 100 / 10) * 10, supply: Math.round(sales * 0.02 * (save.factory || 0) / 10) * 10 };
 }
 
 // 지금 걸린 위기의 효과 모음
@@ -180,7 +202,7 @@ function eff() {
   for (const k in fx) e[k] = fx[k];
   return e;
 }
-function costOf(t) { return TYPES[t].cost * (t === 'red' ? eff().redCost : 1); }
+function costOf(t) { return Math.round(TYPES[t].cost * (t === 'red' ? eff().redCost : 1) * (1 - factoryCut())); }
 function trayMax() { return save.shop ? 24 : 16; }
 
 // ===== 저장 =====
@@ -188,7 +210,8 @@ function freshSave() {
   return { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0, auto: 0 }, best: 0, total: 0,
     shop: false, rating: 0, crisis: null, lastCrisis: 0, suspended: false,
     branches: [], debt: 0, negWeeks: 0, hof: null,
-    fame: 0, hq: false, franchises: [], royalty: 8, adDay: 0, applicants: [], appDay: 0, pandemicDone: false, aidDay: 0 };
+    fame: 0, hq: false, franchises: [], royalty: 8, adDay: 0, applicants: [], appDay: 0, pandemicDone: false, aidDay: 0,
+    factory: 0, research: {}, resWork: null, overseas: [], endings: {} };
 }
 let save = freshSave();
 try {
@@ -267,6 +290,7 @@ function priceOf(t) {
   let p = TYPES[t].price * (1 + 0.1 * save.upg.sign) + (t === 'red' ? e.redPrice : 0);
   if (t === 'cream' || t === 'choco') p *= 1 - e.discount;
   p *= 1 - e.allDiscount;
+  if (save.research && save.research.premium) p *= 1.15;
   return Math.round(p / 10) * 10;
 }
 
@@ -375,7 +399,7 @@ function startPour(i) {
     if (m.state === 'closedA' || m.state === 'closedB') say('뚜껑이 덮여 있어요');
     return false;
   }
-  if (m.state === 'empty') { m.state = 'pour1'; m.fill = 0; m.cooking = true; G.stats.cost += BATTER_COST; sfx.plop(); }
+  if (m.state === 'empty') { m.state = 'pour1'; m.fill = 0; m.cooking = true; G.stats.cost += Math.round(BATTER_COST * (1 - factoryCut())); sfx.plop(); }
   if (m.state === 'filled') { m.state = 'pour2'; }
   m.pouring = true;
   // 자동 반죽 주전자: 톡 누르면 알맞은 양까지 알아서
@@ -619,7 +643,7 @@ function albaBake() {
   for (const t in need) { const g = need[t] - trayCount(t); if (g > gap) { gap = g; pick = t; } }
   if (!pick) { const av = TYPE_KEYS.filter(unlocked); pick = av[Math.random() * av.length | 0]; }
   G.tray.push({ type: pick, stars: 2, alba: true });
-  G.stats.cost += BATTER_COST + costOf(pick);
+  G.stats.cost += Math.round(BATTER_COST * (1 - factoryCut())) + costOf(pick);
   float(W / 2, 290 + DY - 40, '알바생: ' + TYPES[pick].name + ' 1개!', '#bfe8ff');
 }
 
@@ -1244,6 +1268,8 @@ function openNews() {
     if (save.appDay !== save.day) { save.applicants = makeApplicants(); save.appDay = save.day; persist(); }
     lines.push(`<div class="nline">🏢 가맹점 ${save.franchises.length}곳 · 로열티 ${save.royalty}% · 인지도 ${Math.round(save.fame)}${save.applicants.length ? ` · <b>가맹 문의 ${save.applicants.length}건!</b> (사장님 책상 → 프랜차이즈)` : ''}</div>`);
   } else if (save.fame >= 10) lines.push(`<div class="nline">📣 인지도 ${Math.round(save.fame)} · 이름이 알려질수록 손님이 늘어요.</div>`);
+  if (save.resWork) lines.push(`<div class="nline">🔬 ${RESEARCH.find(r => r.id === save.resWork.id).name} 개발 중 · ${save.resWork.left}주 남음</div>`);
+  if (save.overseas && save.overseas.length) lines.push(`<div class="nline">✈️ 해외 매장 ${save.overseas.map(id => OVERSEAS.find(o => o.id === id).icon).join(' ')} 영업 중</div>`);
   if (save.lostFr) { lines.push(`<div class="nline warn">😞 만족도가 낮던 가맹점 ${save.lostFr}곳이 계약을 끝냈어요.</div>`); save.lostFr = 0; persist(); }
   if (save.debt) lines.push(`<div class="nline">🏦 대출 ${save.debt.toLocaleString()}원 · 이번 주 이자 ${Math.round(save.debt * INTEREST).toLocaleString()}원</div>`);
   if (save.negWeeks > 0) lines.push(`<div class="nline warn">⚠️ 돈이 마이너스 ${save.negWeeks}주째예요. 4주 연속이면 파산해요.</div>`);
@@ -1317,10 +1343,34 @@ $('btnOpenShop').onclick = () => {
 function hideAll() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show')); }
 function show(id) { hideAll(); $(id).classList.add('show'); }
 
+// 첫 화면: 포장마차에서 회장님까지 가는 길
+const ROAD = [
+  ['🛒', '포장마차', '틀 3개로 시작'],
+  ['🏠', '내 가게', '5만원으로 1호점'],
+  ['🏪', '직영점', '동네 4곳에 출점'],
+  ['🏢', '본사', '프랜차이즈 가맹점 모집'],
+  ['✈️', '해외 진출', '가맹점 20곳부터'],
+  ['👑', '회장님', '가맹점 100곳'],
+];
+function roadStage() {
+  if (save.endings && save.endings.chairman) return 5;
+  if (save.overseas && save.overseas.length) return 4;
+  if (save.hq) return 3;
+  if (save.branches.length) return 2;
+  if (save.shop) return 1;
+  return 0;
+}
+function roadHTML() {
+  const cur = roadStage();
+  return '<div class="road">' + ROAD.map((r, i) =>
+    `<div class="step${i < cur ? ' done' : i === cur ? ' now' : ''}"><div class="ri">${r[0]}</div><b>${r[1]}</b><span>${r[2]}</span></div>`
+  ).join('<div class="arr">›</div>') + '</div><div class="roadnote">돈을 모아 가게를 키우고, 위기를 버텨 회장님이 되어 보세요. 4주 연속 적자면 파산, 처음부터 다시!</div>';
+}
 function refreshTitle() {
   $('titleInfo').innerHTML = save.total
     ? `<b>${calOf(save.day).year}년차 ${calLabel(save.day)}</b> · ${save.hq ? '본사 + 가맹점 ' + save.franchises.length + '곳' : save.shop ? (save.branches.length ? '가게 ' + (save.branches.length + 1) + '곳' : '내 가게') : '포장마차'}<br>가진 돈 <b>${save.money.toLocaleString()}원</b> · 평점 ★${save.rating.toFixed(1)}${save.debt ? ' · 대출 ' + save.debt.toLocaleString() + '원' : ''}<br>버틴 기간 ${survived(save.day)}${save.hof ? ' · 최고 기록 ' + survived(save.hof.day) : ''}`
     : '반죽 붓고, 속 넣고, 뒤집고, 꺼내고!<br>오늘부터 붕어빵 가게 사장님이에요.' + (save.hof ? `<br>🏆 최고 기록 ${survived(save.hof.day)} · ${save.hof.stage}` : '');
+  $('titleInfo').innerHTML += roadHTML();
   $('btnStart').textContent = save.day > 1 ? calLabel(save.day) + ' 장사 시작' : '장사 시작';
   const rb = $('btnReset');
   rb.style.display = (save.day > 1 || save.total > 0 || save.money) ? 'block' : 'none';
@@ -1367,8 +1417,16 @@ function endDay() {
   // 가맹점 로열티와 본사 운영비
   const frs = save.hq ? save.franchises.map(f => franchiseWeek(f, save.day)) : [];
   const royalty = frs.reduce((a, r) => a + r.royalty, 0);
+  const supply = frs.reduce((a, r) => a + r.supply, 0);
+  const abroad = (save.overseas || []).reduce((a, id) => a + Math.round(OVERSEAS.find(o => o.id === id).income * (0.9 + Math.random() * 0.2) / 10) * 10, 0);
   const upkeep = save.hq ? HQ_UPKEEP + HQ_PER_FR * save.franchises.length : 0;
-  const net = profit - fee - st.settle - rent + brNet + royalty - upkeep - interest;
+  const net = profit - fee - st.settle - rent + brNet + royalty + supply + abroad - upkeep - interest;
+  // 신메뉴 연구 진행
+  let resNote = '';
+  if (save.resWork) {
+    save.resWork.left--;
+    if (save.resWork.left <= 0) { const R = RESEARCH.find(r => r.id === save.resWork.id); save.research[R.id] = true; resNote = R.icon + ' ' + R.name + ' 개발 완료! ' + R.desc + '.'; save.resWork = null; }
+  }
   // 인지도: 가게 수·평점·손님 반응으로 서서히 오르내림
   const fame0 = save.fame || 0;
   let fg = (save.shop ? 0.5 : 0) + save.branches.length * 0.7 + (save.franchises || []).length * 0.3;
@@ -1424,7 +1482,8 @@ function endDay() {
     (fee ? row('배달 수수료', '−' + fee.toLocaleString() + '원') : '') +
     (rent ? row('본점 월세', '−' + rent.toLocaleString() + '원') : '') +
     brs.map(r => row(areaOf(r.b.area).icon + ' ' + areaOf(r.b.area).name + '점 ' + (r.closed ? '(휴업)' : '(자동)'), (r.net >= 0 ? '+' : '−') + Math.abs(r.net).toLocaleString() + '원')).join('') +
-    (save.hq ? row('🏢 가맹점 로열티 (' + frs.length + '곳)', '+' + royalty.toLocaleString() + '원') + row('본사 운영비', '−' + upkeep.toLocaleString() + '원') : '') +
+    (save.hq ? row('🏢 가맹점 로열티 (' + frs.length + '곳)', '+' + royalty.toLocaleString() + '원') + (supply ? row('🏭 반죽 공급', '+' + supply.toLocaleString() + '원') : '') + row('본사 운영비', '−' + upkeep.toLocaleString() + '원') : '') +
+    (abroad ? row('✈️ 해외 매장 (' + save.overseas.length + '곳)', '+' + abroad.toLocaleString() + '원') : '') +
     (interest ? row('대출 이자', '−' + interest.toLocaleString() + '원') : '') +
     row('웃으며 간 손님 / 화난 손님', served + ' / ' + st.angry + '명') +
     (save.fame >= 1 || fame0 ? row('인지도', Math.round(save.fame) + ' (' + (fg >= 0 ? '+' : '−') + Math.abs(fg).toFixed(1) + ')') : '') +
@@ -1436,13 +1495,14 @@ function endDay() {
   if (st.angry) tips.push('손님이 늘면 틀을 여러 개 같이 돌려 보세요.');
   if (!st.sold) tips.unshift('진열대에 붕어빵이 모이면 손님을 눌러 건네요.');
   if (!tips.length) tips.push('완벽한 한 주였어요! 업그레이드로 가게를 키워 보세요.');
-  $('resNote').textContent = (crisisNote ? crisisNote + ' ' : '') + tips[0];
+  $('resNote').textContent = (resNote ? resNote + ' ' : '') + (crisisNote ? crisisNote + ' ' : '') + tips[0];
   if (save.negWeeks >= 4) { showBankrupt(); return; }
   if (save.negWeeks > 0) $('resNote').textContent = '⚠️ 돈이 마이너스예요(' + save.negWeeks + '주째). 4주 연속이면 파산! 은행 대출로 버틸 수 있어요.';
   $('btnBonus').style.display = net > 0 ? 'block' : 'none';
   $('btnBonus').disabled = false;
   $('btnBonus').textContent = '순이익 2배 받기 (+' + Math.max(0, net).toLocaleString() + '원)';
   show('result');
+  checkEnding();
 }
 
 $('btnBonus').onclick = () => {
@@ -1609,10 +1669,66 @@ function renderFr() {
     itemEl(a.icon, `${ap.name} <span class="lv">${a.name} · 솜씨 ★${ap.skill}</span>`, `가맹비 +${FRANCHISE_FEE.toLocaleString()}원 · 로열티 예상 +${e.royalty.toLocaleString()}원/주`, '계약', () => {
       save.money += FRANCHISE_FEE;
       save.franchises.push({ name: ap.name, area: ap.area, skill: ap.skill, sat: 70, since: save.day });
-      save.applicants.splice(i, 1); persist(); sfx.coin(); renderShop();
+      save.applicants.splice(i, 1); persist(); sfx.coin(); renderShop(); checkEnding();
     });
   });
+  renderGrow();
 }
+// 4차: 반죽 공장·연구소·해외 (본사 아래)
+function renderGrow() {
+  const lv = save.factory || 0;
+  if (lv < FACTORY_COSTS.length) {
+    const c = FACTORY_COSTS[lv];
+    itemEl('🏭', `반죽 공장 <span class="lv">Lv.${lv}/3</span>`, `재료비 −15%씩(지금 −${lv * 15}%), 가맹점에 반죽을 팔아 매출의 2%씩 더 받아요. 가맹 문의도 늘어요.`, c.toLocaleString() + '원', () => {
+      if (save.money < c) return; save.money -= c; save.factory = lv + 1; persist(); sfx.coin(); renderShop();
+    }, save.money < c);
+  } else itemEl('🏭', '반죽 공장 <span class="lv">Lv.3/3</span>', '재료비 −45%, 가맹점 반죽 공급 매출의 6%', null);
+  const rw = save.resWork;
+  note(rw ? `🔬 <b>신메뉴 연구소</b> · ${RESEARCH.find(r => r.id === rw.id).name} 개발 중 (${rw.left}주 남음)` : '🔬 <b>신메뉴 연구소</b> · 한 번에 하나씩 개발해요.');
+  RESEARCH.forEach(r => {
+    const done = save.research[r.id];
+    itemEl(r.icon, `${r.name} <span class="lv">${done ? '완료' : r.weeks + '주'}</span>`, r.desc, done ? null : r.cost.toLocaleString() + '원', () => {
+      if (save.resWork || save.money < r.cost) return;
+      save.money -= r.cost; save.resWork = { id: r.id, left: r.weeks }; persist(); sfx.coin(); renderShop();
+    }, !!rw || save.money < r.cost);
+  });
+  const nf = save.franchises.length;
+  note(nf >= OVERSEAS_NEED ? '✈️ <b>해외 진출</b> · 해외 매장은 매주 수익을 보내와요.' : `✈️ <b>해외 진출</b> · 가맹점 ${OVERSEAS_NEED}곳이 되면 열려요 (지금 ${nf}곳)`);
+  OVERSEAS.forEach(o => {
+    const mine = save.overseas.includes(o.id);
+    itemEl(o.icon, `${o.name}${mine ? ' <span class="lv">영업 중</span>' : ''}`, `매주 약 +${o.income.toLocaleString()}원`, mine ? null : o.cost.toLocaleString() + '원', () => {
+      if (nf < OVERSEAS_NEED || save.money < o.cost) return;
+      save.money -= o.cost; save.overseas.push(o.id); persist(); sfx.coin(); renderShop(); checkEnding();
+    }, nf < OVERSEAS_NEED || save.money < o.cost);
+  });
+  note(`👑 가맹점 ${CHAIRMAN_NEED}곳이면 '붕어빵 회장님' 엔딩 (지금 ${nf}곳)`);
+}
+
+// 엔딩
+function checkEnding() {
+  save.endings = save.endings || {};
+  let kind = null;
+  if (!save.endings.global && save.overseas.length) kind = 'global';
+  else if (!save.endings.chairman && save.franchises.length >= CHAIRMAN_NEED) kind = 'chairman';
+  if (!kind) return;
+  save.endings[kind] = true; persist();
+  const back = document.querySelector('.overlay.show') ? document.querySelector('.overlay.show').id : 'title';
+  const o = save.overseas.length ? OVERSEAS.find(x => x.id === save.overseas[0]) : null;
+  const title = kind === 'global' ? '붕어빵, 세계로!' : '붕어빵 회장님';
+  const data = {
+    kind, title,
+    headline: kind === 'global' ? o.icon + ' ' + o.name + ' 1호점 오픈!' : '가맹점 ' + save.franchises.length + '곳 달성!',
+    lines: [['버틴 기간', survived(save.day)], ['구운 붕어빵', save.total.toLocaleString() + '개'], ['가진 돈', save.money.toLocaleString() + '원'], ['평점', '★' + save.rating.toFixed(1)]],
+  };
+  window.EndCard.draw($('endCard'), data);
+  $('endText').textContent = kind === 'global' ? '골목 포장마차에서 시작한 붕어빵이 바다를 건넜어요!' : '전국 어디서나 사장님 붕어빵을 먹을 수 있어요. 이제 회장님!';
+  const fname = (kind === 'global' ? 'bungeoppang-world' : 'bungeoppang-chairman') + '.png';
+  $('btnCardSave').onclick = () => window.EndCard.save($('endCard'), fname);
+  $('btnCardShare').onclick = () => window.EndCard.share($('endCard'), fname, '붕어빵 사장님에서 ' + title + ' 엔딩을 봤어요! ' + survived(save.day) + ' 버텼어요 🐟');
+  $('btnEndGo').onclick = () => show(back);
+  show('ending'); sfx.coin();
+}
+
 function renderBank() {
   const lim = loanLimit();
   note(`🏦 대출 <b>${save.debt.toLocaleString()}원</b> / 한도 ${lim.toLocaleString()}원 · 이자 매주 ${Math.round(INTEREST * 100)}%<br>돈이 4주 연속 마이너스면 파산해요. 파산하면 <b>모든 걸 잃고</b> 포장마차부터 다시 시작해요.`);
@@ -1740,6 +1856,8 @@ function updatePanels() {
     const a = areaOf(b.area), est = branchWeek(b, save.day, true);
     shops += pcRow(`${a.icon} ${a.name}점 · ${b.mgr.name} ★${b.mgr.skill}`, (est.net >= 0 ? '+' : '') + won(est.net));
   }
+  if (save.factory) shops += pcRow('🏭 반죽 공장 Lv.' + save.factory, '재료비 −' + save.factory * 15 + '%');
+  if (save.overseas && save.overseas.length) shops += pcRow('✈️ 해외 ' + save.overseas.map(id => OVERSEAS.find(o => o.id === id).icon).join(''), save.overseas.length + '곳');
   if (save.hq) shops += pcRow(`🏢 가맹점 ${save.franchises.length}곳 · 로열티 ${save.royalty}%`, '+' + won(save.franchises.reduce((a, f) => a + franchiseWeek(f, save.day, true).royalty, 0)));
   if (save.shop && save.branches.length < BRANCH_COSTS.length) shops += `<div class="sub" style="margin-top:6px">다음 출점 ${won(BRANCH_COSTS[save.branches.length])} · 평점 ★${NEED_RATING.toFixed(1)} 필요</div>`;
   L += `<div class="pcbox"><h3>🗺️ 내 가게들</h3>${shops}</div>`;
