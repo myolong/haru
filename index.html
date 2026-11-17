@@ -2,21 +2,80 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>오늘의 그림일기 - 미니게임으로 버티는 하루</title>
-<meta name="description" content="알람 끄기부터 칼퇴 눈치싸움까지, 미니게임 5개로 하루를 버티면 오늘의 그림일기가 완성돼요.">
-<meta property="og:title" content="오늘의 그림일기">
-<meta property="og:description" content="미니게임 5개로 버틴 내 하루, 그림일기로 남겨 보세요.">
-<meta property="og:type" content="website">
-<meta name="theme-color" content="#fdf6e3">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>붕어빵 사장님</title>
+<meta name="description" content="반죽 붓고, 팥 넣고, 뒤집고, 꺼내고! 겨울 길거리 붕어빵 가게를 키우는 모바일 웹게임">
+<meta name="theme-color" content="#1b2240">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main id="app"></main>
-<script src="diary.js"></script>
+<div id="wrap">
+  <canvas id="game"></canvas>
+
+  <!-- 첫 화면 -->
+  <div id="title" class="overlay show">
+    <div class="panel">
+      <div class="logo">🐟</div>
+      <h1>붕어빵 사장님</h1>
+      <p class="sub">찬 바람 부는 골목, 오늘도 붕어빵 굽는 날</p>
+      <div id="titleInfo" class="info"></div>
+      <button id="btnStart" class="big">장사 시작</button>
+      <button id="btnHow" class="ghost">굽는 방법</button>
+      <button id="btnShop0" class="ghost">가게 꾸미기(업그레이드)</button>
+    </div>
+  </div>
+
+  <!-- 굽는 방법 -->
+  <div id="how" class="overlay">
+    <div class="panel left">
+      <h2>붕어빵 굽는 방법</h2>
+      <ol>
+        <li><b>반죽 주전자</b>를 고르고 틀을 <b>꾹 누르고 있으면</b> 반죽이 부어져요. 눈금의 <span class="zone">초록 칸(절반쯤)</span>에서 손을 떼요.</li>
+        <li>아래 버튼에서 <b>팥·슈크림·초코·피자</b> 중 하나를 고르고 틀을 톡 누르면 속이 들어가요.</li>
+        <li>다시 <b>반죽 주전자</b>로 꾹 눌러 <span class="zone">초록 칸(가득)</span>까지 마저 부어요. 너무 많이 부으면 넘쳐요!</li>
+        <li><b>덮기</b> → 아랫면이 익으면 <b>뒤집기</b> → 윗면이 익으면 <b>꺼내기</b>.</li>
+        <li>반죽을 붓는 순간부터 아랫면이 익기 시작해요. <b>너무 오래 두면 새까맣게 타요.</b></li>
+        <li>진열대에 붕어빵이 모이면 <b>손님을 눌러서</b> 주문한 만큼 건네요.</li>
+      </ol>
+      <p class="small">잘 구울수록 별이 많고, 별 3개 붕어빵은 팁도 받아요. 번 돈으로 틀을 늘리고 가게를 키워 보세요.</p>
+      <button class="big" data-close="how">알겠어요</button>
+    </div>
+  </div>
+
+  <!-- 하루 결과 -->
+  <div id="result" class="overlay">
+    <div class="panel">
+      <h2 id="resTitle">1일차 장사 끝!</h2>
+      <div id="resStars" class="stars"></div>
+      <table id="resTable"></table>
+      <div id="resNote" class="small"></div>
+      <button id="btnBonus" class="big gold">오늘 순이익 2배 받기</button>
+      <button id="btnToShop" class="big">가게 업그레이드</button>
+    </div>
+  </div>
+
+  <!-- 상점 -->
+  <div id="shop" class="overlay">
+    <div class="panel left">
+      <h2>가게 업그레이드</h2>
+      <div class="money">가진 돈 <b id="shopMoney">0</b>원</div>
+      <div id="shopList"></div>
+      <button id="btnNextDay" class="big">다음 날 장사 시작</button>
+      <button id="btnShopBack" class="ghost">첫 화면</button>
+    </div>
+  </div>
+
+  <!-- 일시정지 -->
+  <div id="pause" class="overlay">
+    <div class="panel">
+      <h2>잠깐 쉬는 중</h2>
+      <button id="btnResume" class="big">계속하기</button>
+      <button id="btnHow2" class="ghost">굽는 방법</button>
+      <button id="btnSound" class="ghost">소리 끄기</button>
+    </div>
+  </div>
+</div>
+<script src="ads.js"></script>
 <script src="game.js"></script>
 </body>
 </html>
