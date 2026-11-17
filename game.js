@@ -565,7 +565,7 @@ function update(dt) {
     G.nextCust -= dt;
     if (G.nextCust <= 0) {
       spawnCustomer();
-      const base = Math.max(7, 15 - save.day * 0.8) * (1 - 0.08 * save.upg.sign);
+      const base = Math.max(7, Math.min(10, 15 - save.day * 0.8)) * (1 - 0.08 * save.upg.sign);
       const busy = seasonOf(save.day).mult * (save.shop ? 1.3 : 1) * eff().rate * fameBoost();
       G.nextCust = base / busy * (0.75 + Math.random() * 0.5);
     }
