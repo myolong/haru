@@ -57,3 +57,14 @@ tr.total td { border-bottom: 0; font-size: 17px; color: #8a3b12; }
 .item .lv { color: #d9541e; font-weight: 700; }
 .item button { width: auto; margin: 0; padding: 9px 10px; font-size: 14px; color: #fff; background: #d9541e; white-space: nowrap; }
 .item button.max { background: #b9a58a; }
+
+.newshead { text-align: center; font-size: 13px; color: #a0623a; letter-spacing: 1px; margin-bottom: 2px; }
+.nline { font-size: 14px; line-height: 1.5; padding: 8px 10px; margin-bottom: 6px; background: #fff; border-radius: 10px; border: 1px solid #f0d7ad; }
+.nline.warn { background: #fdeee6; border-color: #f2b9a0; }
+.crisis { display: none; margin: 10px 0 4px; padding: 12px; border-radius: 14px; background: #3a2414; color: #fff3d6; }
+.crisis .ctitle { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+.crisis .ctext { font-size: 14px; line-height: 1.5; color: #f6e6c8; }
+.crisis .cpick { font-size: 13px; margin: 10px 0 2px; color: #ffcf5a; font-weight: 700; }
+button.choice { text-align: left; padding: 10px 12px; background: #fff6e4; color: #4a2a12; font-size: 15px; }
+button.choice span { display: block; font-weight: 400; font-size: 12.5px; color: #7d5a3c; margin-top: 2px; }
+.item.big-item { border-color: #e9a514; background: #fffaf0; }

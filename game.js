@@ -32,8 +32,71 @@ const UPGRADES = [
   { key: 'sign',  icon: '🏮', name: '간판 새로 달기', desc: '붕어빵 값 +10%, 손님이 조금 더 자주 와요.', max: 3, costs: [7000, 15000, 28000] },
 ];
 
+// ===== 달력·계절 =====
+// 하루 장사 = 게임 속 1주, 4주 = 1달. 1주차는 11월 1주.
+function calOf(day) {
+  const w = day - 1, mi = 10 + Math.floor(w / 4);
+  return { year: 1 + Math.floor(mi / 12), month: (mi % 12) + 1, week: (w % 4) + 1 };
+}
+function calLabel(day) { const c = calOf(day); return c.month + '월 ' + c.week + '주'; }
+function seasonOf(day) {
+  const m = calOf(day).month;
+  if (m === 12 || m <= 2) return { name: '겨울', tag: '성수기', icon: '❄️', mult: 1, snow: true, line: '붕어빵 찾는 손님이 가장 많아요.' };
+  if (m === 11) return { name: '늦가을', tag: '', icon: '🍂', mult: 0.9, snow: false, line: '찬 바람이 불기 시작해요. 붕어빵 철이 다가와요.' };
+  if (m <= 5) return { name: '봄', tag: '', icon: '🌸', mult: 0.75, snow: false, line: '날이 풀려서 손님이 조금 줄었어요.' };
+  if (m <= 8) return { name: '여름', tag: '비수기', icon: '☀️', mult: 0.5, snow: false, line: '더워서 손님이 절반으로 줄어요.' };
+  return { name: '가을', tag: '', icon: '🍁', mult: 0.8, snow: false, line: '선선해지니 붕어빵 생각나는 손님이 늘어요.' };
+}
+
+// ===== 경영 위기 =====
+const CRISES = {
+  redbean: { icon: '🫘', title: '팥값 폭등!', weeks: 3, base: { redCost: 2 },
+    text: '흉년으로 팥 도매가가 2배가 됐어요. 3주 동안 팥 재료비가 2배예요.',
+    choices: [
+      { label: '팥 붕어빵 값 올리기', desc: '팥 +300원, 대신 손님이 덜 기다려 줘요(−15%)', fx: { redPrice: 300, patience: -0.15 } },
+      { label: '그대로 팔기', desc: '값은 그대로, 이익만 줄어요', fx: {} },
+      { label: '슈크림·초코 할인 행사', desc: '손님이 팥을 덜 찾고, 슈크림·초코 −10%', fx: { redWeight: 0.3, discount: 0.1 } },
+    ] },
+  cold: { icon: '🥶', title: '최강 한파 경보', weeks: 1, base: { rate: 1.4 }, winterOnly: true,
+    text: '이번 주 영하 15도! 붕어빵 찾는 손님이 40% 늘어요.',
+    choices: [
+      { label: '손님께 핫팩 나눠주기', desc: '2,000원, 손님이 30% 더 기다려 줘요', cost: 2000, fx: { patience: 0.3 } },
+      { label: '그냥 영업', desc: '추워서 손님이 빨리 지쳐요(−10%)', fx: { patience: -0.1 } },
+    ] },
+  inspect: { icon: '📋', title: '위생 점검 예고', weeks: 1, base: {},
+    text: '이번 주 구청에서 위생 점검을 나와요. 탄 붕어빵이 많으면 다음 주는 영업정지!',
+    choices: [
+      { label: '대청소 하기', desc: '3,000원, 탄 붕어빵 5개까지 봐줘요', cost: 3000, fx: { burnLimit: 5 } },
+      { label: '그냥 받기', desc: '탄 붕어빵 3개부터 영업정지', fx: { burnLimit: 3 } },
+    ] },
+  viral: { icon: '📱', title: 'SNS에서 대박!', weeks: 1, base: { rate: 2 }, needRating: 2.5,
+    text: '"겉바속촉 붕어빵 맛집" 영상이 퍼졌어요. 이번 주 손님이 2배예요!',
+    choices: [
+      { label: '번호표 나눠주기', desc: '3,000원, 손님이 30% 더 기다려 줘요', cost: 3000, fx: { patience: 0.3 } },
+      { label: '그냥 받기', desc: '줄이 길어 손님이 빨리 지쳐요(−20%)', fx: { patience: -0.2 } },
+    ] },
+};
+const SHOP_COST = 50000, RENT = 6000;
+
+// 지금 걸린 위기의 효과 모음
+function eff() {
+  const e = { rate: 1, patience: 0, redCost: 1, redPrice: 0, redWeight: 1, discount: 0, burnLimit: 0 };
+  const c = save.crisis;
+  if (!c || c.choice == null) return e;
+  const def = CRISES[c.id];
+  const fx = Object.assign({}, def.base, def.choices[c.choice].fx);
+  for (const k in fx) e[k] = fx[k];
+  return e;
+}
+function costOf(t) { return TYPES[t].cost * (t === 'red' ? eff().redCost : 1); }
+function trayMax() { return save.shop ? 24 : 16; }
+
 // ===== 저장 =====
-let save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0 }, best: 0, total: 0 };
+function freshSave() {
+  return { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0 }, best: 0, total: 0,
+    shop: false, rating: 0, crisis: null, lastCrisis: 0, suspended: false };
+}
+let save = freshSave();
 try {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (s && s.day) save = Object.assign(save, s, { upg: Object.assign(save.upg, s.upg || {}) });
@@ -98,7 +161,12 @@ let lastMold = 0;
 
 function moldCount() { return 3 + save.upg.molds; }
 function unlocked(t) { return save.day >= TYPES[t].unlock; }
-function priceOf(t) { return Math.round(TYPES[t].price * (1 + 0.1 * save.upg.sign) / 10) * 10; }
+function priceOf(t) {
+  const e = eff();
+  let p = TYPES[t].price * (1 + 0.1 * save.upg.sign) + (t === 'red' ? e.redPrice : 0);
+  if (t === 'cream' || t === 'choco') p *= 1 - e.discount;
+  return Math.round(p / 10) * 10;
+}
 
 function newMold() {
   return { state: 'empty', fill: 0, fill1: 0, filling: null, dA: 0, dB: 0, flipAnim: 0, overflow: false, pouring: false, cooking: false };
@@ -115,7 +183,7 @@ function startDay() {
   running = true; paused = false;
   hideAll();
   if (save.day === 1 && save.total === 0) say('반죽 주전자로 틀을 꾹 눌러 보세요!', 4);
-  else say(save.day + '일차 장사 시작!', 2);
+  else say(calLabel(save.day) + ' 장사 시작!', 2);
 }
 
 function say(m, t) { G.msg = m; G.msgT = t || 2.2; }
@@ -133,14 +201,16 @@ function spawnCustomer() {
   const slots = [0, 1, 2].filter(i => !G.customers[i]);
   if (!slots.length) return;
   const slot = slots[Math.floor(Math.random() * slots.length)];
-  const avail = TYPE_KEYS.filter(unlocked);
+  const e = eff();
+  let avail = TYPE_KEYS.filter(unlocked);
+  if (e.redWeight < 1 && avail.length > 1 && Math.random() > e.redWeight) avail = avail.filter(t => t !== 'red');
   const maxN = Math.min(1 + save.day, 5);
   const total = 1 + Math.floor(Math.random() * maxN);
   const order = {};
   const kinds = Math.min(avail.length, 1 + Math.floor(Math.random() * Math.min(3, total)));
   const pick = avail.slice().sort(() => Math.random() - .5).slice(0, kinds);
   for (let i = 0; i < total; i++) { const k = pick[i % pick.length]; order[k] = (order[k] || 0) + 1; }
-  const pat = Math.max(26, 46 - save.day * 1.5 + total * 4) * (1 + 0.15 * save.upg.heater);
+  const pat = Math.max(26, 46 - Math.min(save.day, 12) * 1.5 + total * 4) * (1 + 0.15 * save.upg.heater) * (1 + e.patience);
   G.customers[slot] = {
     order, patience: pat, maxPat: pat, enter: 0, leave: 0, mood: null, line: '', lineT: 0,
     skin: SKINS[Math.random() * SKINS.length | 0], hair: HAIRS[Math.random() * HAIRS.length | 0],
@@ -200,11 +270,11 @@ function stopPour(i) { const m = G.molds[i]; if (m) m.pouring = false; }
 
 function addFilling(i, t) {
   const m = G.molds[i];
-  if (!unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '일차부터 팔아요'); return; }
+  if (!unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '주차부터 팔아요'); return; }
   if (m.state === 'empty') { say('먼저 반죽을 절반쯤 부어요'); sfx.bad(); return; }
   if (m.state !== 'pour1') { say(m.filling ? '이미 속을 넣었어요. 반죽 주전자를 골라 마저 부어요' : '이제는 속을 넣을 수 없어요'); return; }
   m.filling = t; m.fill1 = m.fill; m.state = 'filled';
-  G.stats.cost += TYPES[t].cost;
+  G.stats.cost += costOf(t);
   sfx.pop();
 }
 
@@ -252,7 +322,7 @@ function takeOut(i) {
   } else if (r.plain) {
     G.stats.waste++; say('앙꼬 없는 붕어빵은 팔 수 없어요'); sfx.bad();
     float(fx, fy - 30, '속이 없어요', '#ffb0a0');
-  } else if (G.tray.length >= 16) {
+  } else if (G.tray.length >= trayMax()) {
     G.stats.waste++; say('진열대가 꽉 찼어요! 손님에게 먼저 파세요'); sfx.bad();
   } else {
     G.tray.push({ type: m.filling, stars: r.stars, dA: m.dA, dB: m.dB });
@@ -287,7 +357,7 @@ cv.addEventListener('pointerdown', e => {
     const r = toolRect(i);
     if (inR(q, r.x, r.y, r.w, r.h)) {
       const t = TOOLS[i];
-      if (t !== 'batter' && !unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '일차부터 팔아요'); return; }
+      if (t !== 'batter' && !unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '주차부터 팔아요'); return; }
       tool = t; beep(700, .04, 'sine', .05); return;
     }
   }
@@ -330,7 +400,8 @@ function update(dt) {
     if (G.nextCust <= 0) {
       spawnCustomer();
       const base = Math.max(7, 15 - save.day * 0.8) * (1 - 0.08 * save.upg.sign);
-      G.nextCust = base * (0.75 + Math.random() * 0.5);
+      const busy = seasonOf(save.day).mult * (save.shop ? 1.3 : 1) * eff().rate;
+      G.nextCust = base / busy * (0.75 + Math.random() * 0.5);
     }
   }
   for (let s = 0; s < 3; s++) {
@@ -395,14 +466,14 @@ function update(dt) {
 
 // 알바생이 구울 맛: 기다리는 손님에게 모자란 맛 먼저
 function albaBake() {
-  if (G.tray.length >= 16) return;
+  if (G.tray.length >= trayMax()) return;
   const need = {};
   for (const c of G.customers) if (c && !c.leave) for (const t in c.order) need[t] = (need[t] || 0) + c.order[t];
   let pick = null, gap = 0;
   for (const t in need) { const g = need[t] - trayCount(t); if (g > gap) { gap = g; pick = t; } }
   if (!pick) { const av = TYPE_KEYS.filter(unlocked); pick = av[Math.random() * av.length | 0]; }
   G.tray.push({ type: pick, stars: 2, alba: true });
-  G.stats.cost += BATTER_COST + TYPES[pick].cost;
+  G.stats.cost += BATTER_COST + costOf(pick);
   float(W / 2, 290 + DY - 40, '알바생: ' + TYPES[pick].name + ' 1개!', '#bfe8ff');
 }
 
@@ -499,7 +570,8 @@ function drawBackground() {
   for (const [x, y] of [[18, 112], [52, 112], [18, 150], [320, 104], [356, 104], [356, 142], [170, 136], [214, 136]]) {
     ctx.globalAlpha = .55; ctx.fillRect(x, y, 18, 22); ctx.globalAlpha = 1;
   }
-  // 눈
+  // 눈 (겨울만)
+  if (!seasonOf(save.day).snow) return;
   ctx.fillStyle = 'rgba(255,255,255,.75)';
   const tt = (G ? G.t : performance.now() / 1000);
   for (let i = 0; i < 26; i++) {
@@ -573,6 +645,7 @@ function drawCustomer(s, c) {
 }
 
 function drawStall() {
+  if (save.shop) { drawShopFront(); return; }
   // 차양
   const stripes = 10;
   for (let i = 0; i < stripes; i++) {
@@ -586,6 +659,28 @@ function drawStall() {
   // 등불
   const glow = ctx.createRadialGradient(W / 2, 80, 10, W / 2, 80, 230);
   glow.addColorStop(0, 'rgba(255,200,90,.22)'); glow.addColorStop(1, 'rgba(255,200,90,0)');
+  ctx.fillStyle = glow; ctx.fillRect(0, 44, W, 260);
+}
+// 2단계 '내 가게': 벽돌 벽, 창문, 간판
+function drawShopFront() {
+  ctx.fillStyle = '#5a2e22'; ctx.fillRect(0, 44, W, 256);
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+  for (let y = 92; y < 300; y += 14) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    for (let x = ((y / 14) % 2) * 20; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 14); ctx.stroke(); }
+  }
+  // 창문 (따뜻한 실내)
+  ctx.fillStyle = '#ffd98a'; ctx.globalAlpha = .35;
+  rr(24, 110, 110, 90, 8); ctx.fill(); rr(266, 110, 110, 90, 8); ctx.fill(); ctx.globalAlpha = 1;
+  ctx.strokeStyle = '#3a1d14'; ctx.lineWidth = 4;
+  rr(24, 110, 110, 90, 8); ctx.stroke(); rr(266, 110, 110, 90, 8); ctx.stroke();
+  // 간판
+  ctx.fillStyle = '#2b1a12'; rr(40, 50, W - 80, 38, 10); ctx.fill();
+  ctx.strokeStyle = '#e9a514'; ctx.lineWidth = 2; rr(44, 54, W - 88, 30, 8); ctx.stroke();
+  ctx.fillStyle = '#ffd36a'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('🐟 붕어빵 사장님 1호점', W / 2, 70);
+  const glow = ctx.createRadialGradient(W / 2, 80, 10, W / 2, 80, 230);
+  glow.addColorStop(0, 'rgba(255,200,90,.18)'); glow.addColorStop(1, 'rgba(255,200,90,0)');
   ctx.fillStyle = glow; ctx.fillRect(0, 44, W, 260);
 }
 function drawCounter() {
@@ -805,7 +900,7 @@ function drawTools() {
     ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(t === 'batter' ? '반죽' : TYPES[t].name, cx, r.y + 72);
     ctx.font = '11px sans-serif';
-    ctx.fillText(lock ? TYPES[t].unlock + '일차부터' : t === 'batter' ? '꾹 누르기' : priceOf(t).toLocaleString() + '원', cx, r.y + 88);
+    ctx.fillText(lock ? TYPES[t].unlock + '주차부터' : t === 'batter' ? '꾹 누르기' : priceOf(t).toLocaleString() + '원', cx, r.y + 88);
     ctx.globalAlpha = 1;
   });
 }
@@ -857,10 +952,10 @@ function draw() {
   // HUD
   ctx.fillStyle = 'rgba(10,12,30,.7)'; ctx.fillRect(0, 0, W, 44);
   ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-  ctx.fillText(save.day + '일차', 12, 22);
+  ctx.font = 'bold 14px sans-serif'; ctx.fillText(calLabel(save.day), 10, 22);
   const left = Math.max(0, DAY_LEN - G.t);
-  ctx.fillStyle = 'rgba(255,255,255,.2)'; rr(64, 16, 96, 12, 6); ctx.fill();
-  ctx.fillStyle = left < 15 ? '#ef5a3a' : '#ffcf5a'; rr(64, 16, 96 * left / DAY_LEN, 12, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; rr(76, 16, 84, 12, 6); ctx.fill();
+  ctx.fillStyle = left < 15 ? '#ef5a3a' : '#ffcf5a'; rr(76, 16, 84 * left / DAY_LEN, 12, 6); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
   ctx.fillText(G.closing ? '마감' : Math.ceil(left) + '초', 165, 22);
   ctx.textAlign = 'right'; ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#ffe27a';
@@ -894,16 +989,99 @@ function loop(now) {
 }
 requestAnimationFrame(loop);
 
-// ===== 화면 전환 =====
+// ===== 아침 뉴스 + 위기 카드 =====
 const $ = id => document.getElementById(id);
+const FLAVOR = [
+  '동네 학원가에 붕어빵 냄새가 퍼지고 있어요.', '단골 할머니가 오늘도 들르신대요.', '옆 골목 호떡집 사장님이 인사를 왔어요.',
+  '퇴근길 직장인들이 붕어빵을 찾고 있어요.', '초등학생들 사이에서 슈크림이 유행이래요.', '오늘은 바람이 잔잔해요. 장사하기 좋은 날!',
+];
+function rollCrisis() {
+  if (save.crisis || save.suspended || save.day < 3) return;
+  if (save.day - (save.lastCrisis || 0) < 2) return;
+  if (save.rolledDay === save.day) return;   // 하루에 한 번만 뽑기
+  save.rolledDay = save.day; persist();
+  if (Math.random() > 0.4) return;
+  const winter = seasonOf(save.day).snow;
+  const pool = Object.keys(CRISES).filter(id => {
+    const d = CRISES[id];
+    if (d.winterOnly && !winter) return false;
+    if (d.needRating && save.rating < d.needRating) return false;
+    return true;
+  });
+  const id = pool[Math.random() * pool.length | 0];
+  save.crisis = { id, left: CRISES[id].weeks, choice: null };
+  save.lastCrisis = save.day;
+  persist();
+}
+function openNews() {
+  rollCrisis();
+  const se = seasonOf(save.day), c = calOf(save.day);
+  $('newsDate').textContent = c.year + '년차 ' + calLabel(save.day);
+  const lines = [];
+  lines.push(`<div class="nline">${se.icon} <b>${se.name}${se.tag ? ' ' + se.tag : ''}</b> · ${se.line}</div>`);
+  if (save.shop) lines.push(`<div class="nline">🏠 1호점 월세 ${RENT.toLocaleString()}원이 이번 주 결산에서 나가요.</div>`);
+  const cr = save.crisis;
+  if (cr && cr.choice != null) {
+    const d = CRISES[cr.id];
+    lines.push(`<div class="nline warn">${d.icon} <b>${d.title}</b> ${cr.left}주 남음 · ${d.choices[cr.choice].label}</div>`);
+  }
+  if (!cr && !save.suspended) lines.push(`<div class="nline">📰 ${FLAVOR[Math.random() * FLAVOR.length | 0]}</div>`);
+  $('newsLines').innerHTML = lines.join('');
+  const card = $('crisisCard'), btn = $('btnOpenShop');
+  card.innerHTML = '';
+  card.style.display = 'none';
+  btn.disabled = false;
+  if (save.suspended) {
+    card.style.display = 'block';
+    card.innerHTML = `<div class="ctitle">🚫 영업정지 1주</div><div class="ctext">위생 점검에 걸려 이번 주는 문을 닫아야 해요.${save.shop ? ' 월세는 그대로 나가요.' : ''}</div>`;
+    btn.textContent = '이번 주 쉬기';
+  } else if (cr && cr.choice == null) {
+    const d = CRISES[cr.id];
+    card.style.display = 'block';
+    card.innerHTML = `<div class="ctitle">${d.icon} ${d.title}</div><div class="ctext">${d.text}</div><div class="cpick">어떻게 할까요?</div>`;
+    d.choices.forEach((ch, i) => {
+      const b = document.createElement('button');
+      b.className = 'choice';
+      const short = ch.cost && save.money < ch.cost;
+      b.innerHTML = `<b>${ch.label}</b><span>${ch.desc}${short ? ' (돈이 모자라요)' : ''}</span>`;
+      b.disabled = !!short;
+      b.onclick = () => {
+        if (ch.cost) save.money -= ch.cost;
+        cr.choice = i; persist(); sfx.pop(); openNews();
+      };
+      card.appendChild(b);
+    });
+    btn.disabled = true;
+    btn.textContent = '먼저 대응을 골라 주세요';
+  } else {
+    btn.textContent = calLabel(save.day) + ' 장사 시작';
+  }
+  show('news');
+}
+function skipWeek() {
+  const rent = save.shop ? RENT : 0;
+  save.money -= rent;
+  save.suspended = false;
+  save.rating = Math.max(0, save.rating - 0.3);
+  save.day++;
+  persist();
+  openNews();
+}
+$('btnOpenShop').onclick = () => {
+  if (save.suspended) { skipWeek(); return; }
+  if (save.crisis && save.crisis.choice == null) return;
+  startDay();
+};
+
+// ===== 화면 전환 =====
 function hideAll() { document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show')); }
 function show(id) { hideAll(); $(id).classList.add('show'); }
 
 function refreshTitle() {
   $('titleInfo').innerHTML = save.total
-    ? `<b>${save.day}일차</b> · 가진 돈 <b>${save.money.toLocaleString()}원</b><br>지금까지 구운 붕어빵 ${save.total.toLocaleString()}개`
+    ? `<b>${calOf(save.day).year}년차 ${calLabel(save.day)}</b> · ${save.shop ? '내 가게' : '포장마차'}<br>가진 돈 <b>${save.money.toLocaleString()}원</b> · 평점 ★${save.rating.toFixed(1)}<br>지금까지 구운 붕어빵 ${save.total.toLocaleString()}개`
     : '반죽 붓고, 속 넣고, 뒤집고, 꺼내고!<br>오늘부터 붕어빵 가게 사장님이에요.';
-  $('btnStart').textContent = save.day > 1 ? save.day + '일차 장사 시작' : '장사 시작';
+  $('btnStart').textContent = save.day > 1 ? calLabel(save.day) + ' 장사 시작' : '장사 시작';
   const rb = $('btnReset');
   rb.style.display = (save.day > 1 || save.total > 0 || save.money) ? 'block' : 'none';
   rb.classList.remove('armed'); rb.textContent = '처음부터 다시 시작';
@@ -915,13 +1093,13 @@ $('btnReset').onclick = () => {
   const rb = $('btnReset');
   if (!rb.classList.contains('armed')) {
     rb.classList.add('armed');
-    rb.textContent = '한 번 더 누르면 1일차부터 시작해요';
+    rb.textContent = '한 번 더 누르면 처음부터 시작해요';
     clearTimeout(resetTimer);
     resetTimer = setTimeout(refreshTitle, 4000);
     return;
   }
   clearTimeout(resetTimer);
-  save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0 }, best: 0, total: 0 };
+  save = freshSave();
   persist();
   refreshTitle();
   sfx.pop();
@@ -937,14 +1115,33 @@ function endDay() {
   const avgStar = st.sold ? st.starSum / st.sold : 0;
   const rate = total ? served / total : 0;
   const dayStars = (rate >= .9 && avgStar >= 2.6) ? 3 : (rate >= .7 && avgStar >= 2) ? 2 : rate >= .4 ? 1 : 0;
-  save.money += profit;
-  if (profit > save.best) save.best = profit;
-  lastResult = { profit, day: save.day };
+  const rent = save.shop ? RENT : 0;
+  const net = profit - rent;
+  save.money += net;
+  if (net > save.best) save.best = net;
+  // 평점: 붕어빵 별 + 손님 만족을 섞어 서서히 움직임
+  if (total) {
+    const dr = Math.min(5, avgStar * 1.2 + rate * 1.4);
+    save.rating = save.rating ? save.rating * 0.6 + dr * 0.4 : dr;
+  }
+  // 위기 처리
+  let crisisNote = '';
+  const cr = save.crisis;
+  if (cr && cr.choice != null) {
+    if (cr.id === 'inspect') {
+      const lim = eff().burnLimit;
+      if (st.burnt >= lim) { save.suspended = true; crisisNote = '위생 점검 불합격! 탄 붕어빵 ' + st.burnt + '개… 다음 주는 영업정지예요.'; }
+      else crisisNote = '위생 점검 통과! 깨끗한 가게로 인정받았어요.';
+    }
+    cr.left--;
+    if (cr.left <= 0) { if (!crisisNote) crisisNote = CRISES[cr.id].title.replace('!', '') + ' 상황이 끝났어요.'; save.crisis = null; }
+  }
+  lastResult = { profit: net, day: save.day };
   bonusUsed = false;
   save.day++;
   persist();
 
-  $('resTitle').textContent = lastResult.day + '일차 장사 끝!';
+  $('resTitle').textContent = calLabel(lastResult.day) + ' 장사 끝!';
   $('resStars').textContent = '★'.repeat(dayStars) + '☆'.repeat(3 - dayStars);
   const row = (a, b, cls) => `<tr class="${cls || ''}"><td>${a}</td><td>${b}</td></tr>`;
   $('resTable').innerHTML =
@@ -952,18 +1149,19 @@ function endDay() {
     row('매출', st.revenue.toLocaleString() + '원') +
     row('팁', st.tips.toLocaleString() + '원') +
     row('재료비', '−' + st.cost.toLocaleString() + '원') +
+    (rent ? row('월세(주)', '−' + rent.toLocaleString() + '원') : '') +
     row('웃으며 간 손님 / 화난 손님', served + ' / ' + st.angry + '명') +
     row('탄 붕어빵 / 버린 붕어빵', st.burnt + ' / ' + (st.waste + G.tray.length) + '개') +
-    row('오늘 순이익', (profit >= 0 ? '' : '−') + Math.abs(profit).toLocaleString() + '원', 'total');
+    row('이번 주 순이익', (net >= 0 ? '' : '−') + Math.abs(net).toLocaleString() + '원', 'total');
   const tips = [];
   if (st.burnt) tips.push('뚜껑을 덮은 뒤 버튼이 노랗게 빛나면 바로 뒤집거나 꺼내요.');
   if (st.angry) tips.push('손님이 늘면 틀을 여러 개 같이 돌려 보세요.');
   if (!st.sold) tips.unshift('진열대에 붕어빵이 모이면 손님을 눌러 건네요.');
-  if (!tips.length) tips.push('완벽한 하루였어요! 업그레이드로 가게를 키워 보세요.');
-  $('resNote').textContent = tips[0];
-  $('btnBonus').style.display = profit > 0 ? 'block' : 'none';
+  if (!tips.length) tips.push('완벽한 한 주였어요! 업그레이드로 가게를 키워 보세요.');
+  $('resNote').textContent = (crisisNote ? crisisNote + ' ' : '') + tips[0];
+  $('btnBonus').style.display = net > 0 ? 'block' : 'none';
   $('btnBonus').disabled = false;
-  $('btnBonus').textContent = '오늘 순이익 2배 받기 (+' + Math.max(0, profit).toLocaleString() + '원)';
+  $('btnBonus').textContent = '순이익 2배 받기 (+' + Math.max(0, net).toLocaleString() + '원)';
   show('result');
 }
 
@@ -981,6 +1179,19 @@ $('btnBonus').onclick = () => {
 function renderShop() {
   $('shopMoney').textContent = save.money.toLocaleString();
   $('shopList').innerHTML = '';
+  const sd = document.createElement('div');
+  sd.className = 'item big-item';
+  if (!save.shop) {
+    sd.innerHTML = `<div class="ic">🏠</div><div class="tx"><b>내 가게 열기 <span class="lv">2단계</span></b>포장마차를 접고 상가에 1호점을 열어요. 손님 +30%, 진열대 16→24개. 대신 매주 월세 ${RENT.toLocaleString()}원.</div>`;
+    const b = document.createElement('button');
+    b.textContent = SHOP_COST.toLocaleString() + '원';
+    b.disabled = save.money < SHOP_COST;
+    b.onclick = () => { if (save.money < SHOP_COST) return; save.money -= SHOP_COST; save.shop = true; persist(); sfx.coin(); renderShop(); };
+    sd.appendChild(b);
+  } else {
+    sd.innerHTML = `<div class="ic">🏠</div><div class="tx"><b>1호점 운영 중</b>손님 +30%, 진열대 24개 · 월세 매주 ${RENT.toLocaleString()}원</div>`;
+  }
+  $('shopList').appendChild(sd);
   UPGRADES.forEach(u => {
     const lv = save.upg[u.key];
     const div = document.createElement('div');
@@ -1012,17 +1223,17 @@ function renderShop() {
 
 $('btnToShop').onclick = () => { renderShop(); show('shop'); };
 $('btnShop0').onclick = () => { renderShop(); show('shop'); };
-$('btnNextDay').onclick = () => { window.Ads.interstitial(() => startDay()); };
+$('btnNextDay').onclick = () => { window.Ads.interstitial(() => openNews()); };
 $('btnShopBack').onclick = () => { refreshTitle(); show('title'); G = null; };
 $('btnStart').onclick = () => {
   if (save.day === 1 && save.total === 0) { show('how'); $('how').dataset.thenStart = '1'; return; }
-  startDay();
+  openNews();
 };
 $('btnHow').onclick = () => { show('how'); };
 $('btnHow2').onclick = () => { $('how').dataset.backPause = '1'; show('how'); };
 document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => {
   const how = $('how');
-  if (how.dataset.thenStart) { delete how.dataset.thenStart; startDay(); return; }
+  if (how.dataset.thenStart) { delete how.dataset.thenStart; openNews(); return; }
   if (how.dataset.backPause) { delete how.dataset.backPause; show('pause'); return; }
   refreshTitle(); show('title');
 });
@@ -1042,5 +1253,5 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 refreshTitle();
 
 // 시험용
-window.__bungeo = { get G() { return G; }, save: () => save, startDay, moldAction, startPour, stopPour, addFilling, serve, setTool: t => tool = t, endDay };
+window.__bungeo = { get G() { return G; }, save: () => save, openNews, setSave: o => { Object.assign(save, o); persist(); }, startDay, moldAction, startPour, stopPour, addFilling, serve, setTool: t => tool = t, endDay };
 })();
