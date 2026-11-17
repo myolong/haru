@@ -8,6 +8,26 @@ html, body {
 #wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
 canvas { display: block; touch-action: none; }
 
+/* PC 넓은 화면: 양옆 현황판 */
+.pcside { display: none; }
+body.pc #wrap { gap: 24px; }
+body.pc .pcside {
+  display: flex; flex-direction: column; gap: 12px; width: 300px; max-height: 96vh; overflow-y: auto;
+  color: #f6e6c8; font-size: 14px;
+}
+.pcbox { background: rgba(255,246,228,.07); border: 1px solid rgba(255,207,90,.25); border-radius: 16px; padding: 14px 16px; }
+.pcbox h3 { margin: 0 0 8px; font-size: 15px; color: #ffcf5a; }
+.pcbox .big { font-size: 26px; font-weight: 800; color: #fff; }
+.pcbox .sub { color: #c9b89a; font-size: 13px; }
+.pcrow { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,.1); }
+.pcrow:last-child { border-bottom: 0; }
+.pcrow b { color: #fff; }
+.pcrow.total b { color: #ffe27a; font-size: 16px; }
+.pcrow .ok { color: #8fe08a; } .pcrow .no { color: #ff9a80; }
+.pcwarn { color: #ffb08a; }
+kbd { display: inline-block; min-width: 20px; padding: 1px 6px; margin: 0 1px; border-radius: 5px; background: #3a2414; border: 1px solid #7a4a26; color: #fff; font: 12px/1.5 inherit; text-align: center; }
+.keys div { padding: 3px 0; }
+
 .overlay {
   position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
   background: rgba(10, 12, 28, .62); padding: 16px; z-index: 5;

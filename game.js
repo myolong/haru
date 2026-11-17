@@ -103,13 +103,13 @@ function makeManagers() {
 }
 function areaOf(id) { return AREAS.find(a => a.id === id); }
 // 직영점 한 곳의 이번 주 자동 정산
-function branchWeek(b, day) {
+function branchWeek(b, day, steady) {
   const a = areaOf(b.area), se = seasonOf(day);
   let sm = se.mult;
   if (a.id === 'tour') sm = 0.5 + se.mult * 0.5;                 // 계절을 덜 탐
   if (a.id === 'college' && (calOf(day).month === 7 || calOf(day).month === 8 || calOf(day).month === 1)) sm *= 0.6; // 방학
   const ratingF = 0.7 + Math.min(5, save.rating) * 0.08;
-  const sales = Math.round(30000 * a.traffic * sm * (0.6 + 0.1 * b.mgr.skill) * ratingF * (0.9 + Math.random() * 0.2) * eff().rate / 10) * 10;
+  const sales = Math.round(30000 * a.traffic * sm * (0.6 + 0.1 * b.mgr.skill) * ratingF * (steady ? 1 : 0.9 + Math.random() * 0.2) * eff().rate / 10) * 10;
   const cost = Math.round(sales * 0.3 / 10) * 10;
   return { sales, cost, rent: a.rent, wage: b.mgr.wage, net: sales - cost - a.rent - b.mgr.wage };
 }
@@ -146,9 +146,15 @@ function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 let scale = 1, dpr = 1;
+let isPC = false;
 function resize() {
-  const vw = window.innerWidth, vh = window.innerHeight;
-  scale = Math.min(vw / W, vh / H);
+  let vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // 넓은 PC 화면이면 양옆에 현황판을 두고 가운데 게임
+  isPC = vw >= 1000 && vw / vh >= 1.25;
+  document.body.classList.toggle('pc', isPC);
+  if (isPC) vw -= 2 * 300 + 48;
+  scale = Math.min(vw / W, vh * 0.98 / H);
   dpr = Math.min(window.devicePixelRatio || 1, 3);
   cv.style.width = (W * scale) + 'px';
   cv.style.height = (H * scale) + 'px';
@@ -892,7 +898,7 @@ function drawMold(i) {
   } else {
     ctx.fillStyle = 'rgba(255,255,255,.18)';
     ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('틀 ' + (i + 1), cx, c.y + 133);
+    ctx.fillText('틀 ' + (i + 1) + (isPC ? ' · ' + 'QWEASD'[i] + ' 키' : ''), cx, c.y + 133);
   }
 }
 
@@ -1393,6 +1399,88 @@ $('btnSound').onclick = () => { soundOn = !soundOn; $('btnSound').textContent = 
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 
 refreshTitle();
+
+// ===== PC: 키보드 단축키 =====
+// 1~5 재료, Q W E / A S D 틀(누르고 있으면 반죽), 스페이스 = 마지막 틀 덮기·뒤집기·꺼내기, Z X C 손님, P 일시정지
+const MOLD_KEYS = ['q', 'w', 'e', 'a', 's', 'd'];
+const CUST_KEYS = ['z', 'x', 'c'];
+const keyPour = {};
+document.addEventListener('keydown', e => {
+  if (!running || paused || !G) return;
+  const k = e.key.toLowerCase();
+  if (k === 'p' || k === 'escape') { pauseGame(); return; }
+  if (e.repeat) return;
+  if (k >= '1' && k <= '5') {
+    const t = TOOLS[+k - 1];
+    if (t !== 'batter' && !unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '주차부터 팔아요'); return; }
+    tool = t; beep(700, .04, 'sine', .05); return;
+  }
+  const mi = MOLD_KEYS.indexOf(k);
+  if (mi >= 0 && mi < G.molds.length) {
+    lastMold = mi;
+    if (tool === 'batter') { if (startPour(mi)) keyPour[k] = mi; }
+    else addFilling(mi, tool);
+    return;
+  }
+  if (k === ' ') { e.preventDefault(); moldAction(lastMold); return; }
+  const ci = CUST_KEYS.indexOf(k);
+  if (ci >= 0 && G.customers[ci]) serve(ci);
+});
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (keyPour[k] !== undefined) { stopPour(keyPour[k]); delete keyPour[k]; }
+});
+
+// ===== PC: 양옆 현황판 =====
+function won(n) { return (n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + '원'; }
+function pcRow(a, b, cls) { return `<div class="pcrow ${cls || ''}"><span>${a}</span><b>${b}</b></div>`; }
+function updatePanels() {
+  if (!isPC) return;
+  const se = seasonOf(save.day), c = calOf(save.day);
+  let L = '';
+  L += `<div class="pcbox"><h3>📅 ${c.year}년차</h3><div class="big">${calLabel(save.day)}</div><div class="sub">${se.icon} ${se.name}${se.tag ? ' ' + se.tag : ''} · ${se.line}</div></div>`;
+  let news = '';
+  const cr = save.crisis;
+  if (save.suspended) news += `<div class="pcwarn">🚫 영업정지 1주</div>`;
+  if (cr) { const d = CRISES[cr.id]; news += `<div class="pcwarn">${d.icon} ${d.title} (${cr.left}주 남음)</div><div class="sub">${cr.choice != null ? '대응: ' + d.choices[cr.choice].label : '아침 뉴스에서 대응을 골라요'}</div>`; }
+  if (save.negWeeks > 0) news += `<div class="pcwarn">⚠️ 마이너스 ${save.negWeeks}주째 (4주면 파산)</div>`;
+  L += `<div class="pcbox"><h3>📰 이번 주 소식</h3>${news || '<div class="sub">별일 없는 평화로운 한 주예요.</div>'}</div>`;
+  let shops = pcRow(save.shop ? '🏠 본점 (직접 굽기)' : '🛒 포장마차 (직접 굽기)', save.shop ? '월세 ' + won(RENT) : '월세 없음');
+  for (const b of save.branches) {
+    const a = areaOf(b.area), est = branchWeek(b, save.day, true);
+    shops += pcRow(`${a.icon} ${a.name}점 · ${b.mgr.name} ★${b.mgr.skill}`, (est.net >= 0 ? '+' : '') + won(est.net));
+  }
+  if (save.shop && save.branches.length < BRANCH_COSTS.length) shops += `<div class="sub" style="margin-top:6px">다음 출점 ${won(BRANCH_COSTS[save.branches.length])} · 평점 ★${NEED_RATING.toFixed(1)} 필요</div>`;
+  L += `<div class="pcbox"><h3>🗺️ 내 가게들</h3>${shops}</div>`;
+  L += `<div class="pcbox"><h3>🏆 기록</h3>${pcRow('최고 주간 순이익', won(save.best))}${pcRow('구운 붕어빵', save.total.toLocaleString() + '개')}${save.legacy ? pcRow('장인 비법', 'Lv.' + save.legacy) : ''}</div>`;
+  $('pcLeft').innerHTML = L;
+
+  let R = `<div class="pcbox"><h3>💵 사장님 지갑</h3><div class="big">${won(save.money)}</div><div class="sub">평점 ★${save.rating.toFixed(1)}${save.debt ? ' · 대출 ' + won(save.debt) : ''}</div></div>`;
+  if (G && running) {
+    const st = G.stats;
+    const brs = save.branches.reduce((a, b) => a + branchWeek(b, save.day, true).net, 0);
+    const rent = save.shop ? RENT : 0, intr = Math.round(save.debt * INTEREST);
+    const est = st.revenue + st.tips - st.cost - rent + brs - intr;
+    R += `<div class="pcbox"><h3>💰 이번 주 장부 (진행 중)</h3>${pcRow('매출 + 팁', won(st.revenue + st.tips))}${pcRow('재료비', won(-st.cost))}${rent ? pcRow('본점 월세', won(-rent)) : ''}${save.branches.length ? pcRow('직영점 예상', won(brs)) : ''}${intr ? pcRow('대출 이자', won(-intr)) : ''}${pcRow('예상 순이익', won(est), 'total')}${pcRow('손님 웃음 / 화남', st.happy + ' / ' + st.angry + '명')}</div>`;
+    const need = {};
+    for (const cu of G.customers) if (cu && !cu.leave) for (const t in cu.order) need[t] = (need[t] || 0) + cu.order[t];
+    let ord = '';
+    for (const t of TYPE_KEYS) {
+      if (!unlocked(t)) continue;
+      const n = need[t] || 0, have = trayCount(t);
+      ord += pcRow(TYPES[t].name, `<span class="${n && have < n ? 'no' : 'ok'}">진열 ${have}</span> / 주문 ${n}`);
+    }
+    R += `<div class="pcbox"><h3>📋 주문 현황</h3>${ord}${save.upg.alba ? `<div class="sub" style="margin-top:6px">🧑‍🍳 알바 ${save.upg.alba}명이 5초마다 굽는 중</div>` : ''}</div>`;
+  }
+  R += `<div class="pcbox keys"><h3>⌨️ 단축키</h3>
+    <div><kbd>1</kbd>~<kbd>5</kbd> 반죽·팥·슈크림·초코·피자</div>
+    <div><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 틀 (누르고 있으면 반죽)</div>
+    <div><kbd>Space</kbd> 덮기·뒤집기·꺼내기 (마지막 틀)</div>
+    <div><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 손님에게 건네기</div>
+    <div><kbd>P</kbd> 잠깐 쉬기</div></div>`;
+  $('pcRight').innerHTML = R;
+}
+setInterval(updatePanels, 300);
 
 // 시험용
 window.__bungeo = { get G() { return G; }, save: () => save, openNews, setSave: o => { Object.assign(save, o); persist(); }, startDay, moldAction, startPour, stopPour, addFilling, serve, setTool: t => tool = t, endDay };
