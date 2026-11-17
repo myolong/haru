@@ -105,7 +105,7 @@ function newMold() {
 
 function startDay() {
   G = {
-    t: 0, molds: [], tray: [], customers: [null, null, null], nextCust: 2.5,
+    t: 0, molds: [], tray: [], customers: [null, null, null], nextCust: 5,
     floats: [], stats: { sold: 0, revenue: 0, tips: 0, cost: 0, happy: 0, angry: 0, burnt: 0, waste: 0, starSum: 0 },
     pointers: {}, closing: false, msg: '', msgT: 0, smoke: [],
   };
@@ -139,7 +139,7 @@ function spawnCustomer() {
   const kinds = Math.min(avail.length, 1 + Math.floor(Math.random() * Math.min(3, total)));
   const pick = avail.slice().sort(() => Math.random() - .5).slice(0, kinds);
   for (let i = 0; i < total; i++) { const k = pick[i % pick.length]; order[k] = (order[k] || 0) + 1; }
-  const pat = Math.max(20, 38 - save.day * 1.5 + total * 3) * (1 + 0.15 * save.upg.heater);
+  const pat = Math.max(26, 46 - save.day * 1.5 + total * 4) * (1 + 0.15 * save.upg.heater);
   G.customers[slot] = {
     order, patience: pat, maxPat: pat, enter: 0, leave: 0, mood: null, line: '', lineT: 0,
     skin: SKINS[Math.random() * SKINS.length | 0], hair: HAIRS[Math.random() * HAIRS.length | 0],
@@ -328,7 +328,7 @@ function update(dt) {
     G.nextCust -= dt;
     if (G.nextCust <= 0) {
       spawnCustomer();
-      const base = Math.max(4.2, 9 - save.day * 0.45) * (1 - 0.08 * save.upg.sign);
+      const base = Math.max(7, 15 - save.day * 0.8) * (1 - 0.08 * save.upg.sign);
       G.nextCust = base * (0.75 + Math.random() * 0.5);
     }
   }
