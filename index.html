@@ -9,8 +9,11 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<canvas id="street"></canvas>
 <div id="wrap">
+  <aside id="pcLeft" class="pcside"></aside>
   <canvas id="game"></canvas>
+  <aside id="pcRight" class="pcside"></aside>
 
   <!-- 첫 화면 -->
   <div id="title" class="overlay show">
@@ -33,7 +36,7 @@
       <ol>
         <li><b>반죽 주전자</b>를 고르고 틀을 <b>꾹 누르고 있으면</b> 반죽이 부어져요. 눈금의 <span class="zone">초록 칸(절반쯤)</span>에서 손을 떼요.</li>
         <li>아래 버튼에서 <b>팥·슈크림·초코·피자</b> 중 하나를 고르고 틀을 톡 누르면 속이 들어가요.</li>
-        <li>다시 <b>반죽 주전자</b>로 꾹 눌러 <span class="zone">초록 칸(가득)</span>까지 마저 부어요. 너무 많이 부으면 넘쳐요!</li>
+        <li>다시 <b>반죽 주전자</b>로 꾹 눌러 <span class="zone">초록 칸(가득)</span>까지 마저 부어요. 너무 많이 부어 넘치거나, 너무 적어 속이 보이면 <b>팔 수 없어요.</b></li>
         <li><b>덮기</b> → 아랫면이 익으면 <b>뒤집기</b> → 윗면이 익으면 <b>꺼내기</b>.</li>
         <li>반죽을 붓는 순간부터 아랫면이 익기 시작해요. <b>너무 오래 두면 새까맣게 타요.</b></li>
         <li>진열대에 붕어빵이 모이면 <b>손님을 눌러서</b> 주문한 만큼 건네요.</li>
@@ -100,5 +103,6 @@
 </div>
 <script src="ads.js"></script>
 <script src="game.js"></script>
+<script src="street.js"></script>
 </body>
 </html>

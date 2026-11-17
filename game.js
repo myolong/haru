@@ -103,13 +103,13 @@ function makeManagers() {
 }
 function areaOf(id) { return AREAS.find(a => a.id === id); }
 // 직영점 한 곳의 이번 주 자동 정산
-function branchWeek(b, day) {
+function branchWeek(b, day, steady) {
   const a = areaOf(b.area), se = seasonOf(day);
   let sm = se.mult;
   if (a.id === 'tour') sm = 0.5 + se.mult * 0.5;                 // 계절을 덜 탐
   if (a.id === 'college' && (calOf(day).month === 7 || calOf(day).month === 8 || calOf(day).month === 1)) sm *= 0.6; // 방학
   const ratingF = 0.7 + Math.min(5, save.rating) * 0.08;
-  const sales = Math.round(30000 * a.traffic * sm * (0.6 + 0.1 * b.mgr.skill) * ratingF * (0.9 + Math.random() * 0.2) * eff().rate / 10) * 10;
+  const sales = Math.round(30000 * a.traffic * sm * (0.6 + 0.1 * b.mgr.skill) * ratingF * (steady ? 1 : 0.9 + Math.random() * 0.2) * eff().rate / 10) * 10;
   const cost = Math.round(sales * 0.3 / 10) * 10;
   return { sales, cost, rent: a.rent, wage: b.mgr.wage, net: sales - cost - a.rent - b.mgr.wage };
 }
@@ -146,14 +146,21 @@ function persist() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save));
 const cv = document.getElementById('game');
 const ctx = cv.getContext('2d');
 let scale = 1, dpr = 1;
+let isPC = false;
 function resize() {
-  const vw = window.innerWidth, vh = window.innerHeight;
-  scale = Math.min(vw / W, vh / H);
+  let vw = window.innerWidth;
+  const vh = window.innerHeight;
+  // 넓은 PC 화면이면 양옆에 현황판을 두고 가운데 게임
+  isPC = vw >= 1000 && vw / vh >= 1.25;
+  document.body.classList.toggle('pc', isPC);
+  if (isPC) vw -= 2 * 300 + 48;
+  scale = Math.min(vw / W, vh * 0.98 / H);
   dpr = Math.min(window.devicePixelRatio || 1, 3);
   cv.style.width = (W * scale) + 'px';
   cv.style.height = (H * scale) + 'px';
   cv.width = Math.round(W * scale * dpr);
   cv.height = Math.round(H * scale * dpr);
+  if (window.Street) Street.resize();
 }
 window.addEventListener('resize', resize);
 resize();
@@ -255,6 +262,7 @@ function spawnCustomer() {
     skin: SKINS[Math.random() * SKINS.length | 0], hair: HAIRS[Math.random() * HAIRS.length | 0],
     coat: COATS[Math.random() * COATS.length | 0], hat: Math.random() < .4, bob: Math.random() * 6,
   };
+  if (window.Street) Street.arrive();
 }
 
 function trayCount(t) { return G.tray.filter(b => b.type === t).length; }
@@ -287,6 +295,7 @@ function serve(slot) {
   c.mood = avg >= 2.5 ? 'happy' : avg >= 1.8 ? 'ok' : 'meh';
   const lines = c.mood === 'happy' ? HAPPY_LINES : c.mood === 'ok' ? OK_LINES : MEH_LINES;
   c.line = lines[Math.random() * lines.length | 0]; c.lineT = 1.6;
+  if (window.Street) Street.leave(c.mood);
   float(CUST_X[slot], 140, '+' + (money + tip).toLocaleString() + '원' + (tip ? ' (팁!)' : ''), '#ffe27a');
   sfx.coin();
 }
@@ -335,11 +344,12 @@ function evaluate(m) {
   if (!m.filling) return { plain: true };
   if (m.dA > BURN || m.dB > BURN) return { burnt: true };
   const f1 = m.fill1, f2 = m.fill;
+  // 팔 수 없는 실수: 반죽 넘침, 속이 드러날 만큼 반죽이 모자람
+  if (f2 > 108) return { spoiled: '반죽이 넘쳐 모양이 망가졌어요… 버려야 해요', tag: '넘쳤어요' };
+  if (f2 < 75) return { spoiled: '반죽이 모자라 속이 다 보여요… 버려야 해요', tag: '속이 보여요' };
   if (f1 < ZONE1[0] - 12 || f1 > ZONE1[1] + 12) { score -= 15; notes.push(f1 < ZONE1[0] ? '속이 바닥에 붙음' : '속이 위로 뜸'); }
   else if (f1 < ZONE1[0] || f1 > ZONE1[1]) score -= 6;
-  if (f2 < 75) { score -= 25; notes.push('반죽이 모자람'); }
-  else if (f2 < ZONE2[0]) score -= 8;
-  else if (f2 > 108) { score -= 20; notes.push('반죽이 넘침'); }
+  if (f2 < ZONE2[0]) score -= 8;
   else if (f2 > ZONE2[1]) score -= 5;
   for (const d of [m.dA, m.dB]) {
     if (d < 0.5) { score -= 40; notes.push('설익음'); }
@@ -358,6 +368,9 @@ function takeOut(i) {
   if (r.burnt) {
     G.stats.burnt++; say('앗, 새까맣게 탔어요… 버려야 해요'); sfx.bad();
     float(fx, fy - 30, '탔어요 🔥', '#ff8a6a');
+  } else if (r.spoiled) {
+    G.stats.waste++; say(r.spoiled); sfx.bad();
+    float(fx, fy - 30, r.tag, '#ffb0a0');
   } else if (r.plain) {
     G.stats.waste++; say('앙꼬 없는 붕어빵은 팔 수 없어요'); sfx.bad();
     float(fx, fy - 30, '속이 없어요', '#ffb0a0');
@@ -458,6 +471,7 @@ function update(dt) {
     if (c.patience <= 0) {
       c.leave = 0.001; c.mood = 'angry'; c.line = '너무 오래 걸려요!'; c.lineT = 1.4;
       G.stats.angry++; sfx.bad();
+      if (window.Street) Street.leave('angry');
     }
   }
 
@@ -465,7 +479,7 @@ function update(dt) {
   G.molds.forEach((m, i) => {
     if (m.pouring && canPour(m)) {
       m.fill = Math.min(125, m.fill + POUR_RATE * dt);
-      if (m.fill > 108 && !m.overflow) { m.overflow = true; say('반죽이 넘쳐요!'); }
+      if (m.fill > 108 && !m.overflow) { m.overflow = true; say('반죽이 넘쳤어요! 이건 팔 수 없어요'); }
     }
     if (m.cooking) {
       if (m.state === 'closedB') m.dB += COOK_BASE * fire * dt;
@@ -617,6 +631,62 @@ function drawBackground() {
     const x = (i * 97 + tt * (8 + i % 5 * 3)) % W;
     const y = (i * 53 + tt * (18 + i % 4 * 6)) % 280;
     ctx.beginPath(); ctx.arc(x, y + 10, 1.2 + (i % 3) * .5, 0, 7); ctx.fill();
+  }
+}
+
+// 골목을 지나가는 사람들(손님 뒤, 카운터 너머)
+const walkers = [];
+function festiveMonth() { const m = calOf(save.day).month; return m >= 11 || m <= 2; }
+function stepWalkers(dt) {
+  for (const p of walkers) { p.x += p.dir * p.v * dt; p.ph += dt * p.v / 6; }
+  for (let i = walkers.length - 1; i >= 0; i--) if (walkers[i].x < -40 || walkers[i].x > W + 40) walkers.splice(i, 1);
+  if (walkers.length < 4 && Math.random() < dt * .7) {
+    const dir = Math.random() < .5 ? 1 : -1;
+    walkers.push({ x: dir > 0 ? -30 : W + 30, dir, v: 22 + Math.random() * 16, ph: 0, far: Math.random() < .5,
+      coat: COATS[Math.random() * COATS.length | 0], skin: SKINS[Math.random() * SKINS.length | 0],
+      hair: HAIRS[Math.random() * HAIRS.length | 0], santa: festiveMonth() && Math.random() < .3,
+      bag: Math.random() < .4 ? (Math.random() < .5 ? '#d6402a' : '#e9d6b0') : null });
+  }
+}
+function drawWalkers() {
+  // 연말 전구줄
+  if (festiveMonth()) {
+    const BL = ['#ff5a4a', '#ffd34a', '#5ad46a', '#5ab4ff', '#ff8ad8'];
+    const t = performance.now() / 1000;
+    for (let r = 0; r < 2; r++) {
+      const y0 = (save.shop ? 96 : 82) + r * 34 + DY * 0;
+      ctx.strokeStyle = 'rgba(20,20,30,.7)'; ctx.lineWidth = 1.2; ctx.beginPath();
+      for (let i = 0; i <= 20; i++) { const u = i / 20; const yy = y0 + Math.sin(u * Math.PI) * 18; i ? ctx.lineTo(u * W, yy) : ctx.moveTo(0, yy); }
+      ctx.stroke();
+      for (let i = 1; i < 16; i++) {
+        const u = i / 16, x = u * W, y = y0 + Math.sin(u * Math.PI) * 18 + 3;
+        const b = .55 + .45 * Math.sin(t * 2.4 + i * 1.7 + r * 2);
+        ctx.fillStyle = BL[(i + r * 2) % BL.length];
+        ctx.globalAlpha = .25 * b; ctx.beginPath(); ctx.arc(x, y, 7, 0, 7); ctx.fill();
+        ctx.globalAlpha = .6 + .4 * b; ctx.beginPath(); ctx.arc(x, y, 2.6, 0, 7); ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  for (const p of walkers) {
+    const s = p.far ? .5 : .62, foot = p.far ? 284 : 292;
+    const x = p.x, st = Math.sin(p.ph);
+    ctx.save(); ctx.globalAlpha = p.far ? .75 : .9;
+    ctx.strokeStyle = '#2a2a36'; ctx.lineWidth = 7 * s; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x, foot - 34 * s); ctx.lineTo(x + st * 9 * s, foot); ctx.moveTo(x, foot - 34 * s); ctx.lineTo(x - st * 9 * s, foot); ctx.stroke();
+    const by = foot - 30 * s;
+    ctx.fillStyle = p.coat; rr(x - 17 * s, by - 52 * s, 34 * s, 56 * s, 13 * s); ctx.fill();
+    if (p.bag) { ctx.fillStyle = p.bag; ctx.fillRect(x + p.dir * 8 * s - 8 * s, by - 18 * s, 16 * s, 18 * s); }
+    ctx.fillStyle = '#e8e2d0'; rr(x - 13 * s, by - 58 * s, 26 * s, 9 * s, 4 * s); ctx.fill();
+    const hy = by - 72 * s;
+    ctx.fillStyle = p.skin; ctx.beginPath(); ctx.arc(x, hy, 14 * s, 0, 7); ctx.fill();
+    ctx.fillStyle = p.hair; ctx.beginPath(); ctx.arc(x - p.dir * 2 * s, hy - 3 * s, 14.5 * s, Math.PI, Math.PI * 2); ctx.fill();
+    if (p.santa) {
+      ctx.fillStyle = '#c94a3a'; ctx.beginPath(); ctx.moveTo(x - 14 * s, hy - 6 * s); ctx.lineTo(x + 14 * s, hy - 6 * s); ctx.lineTo(x - p.dir * 16 * s, hy - 30 * s); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(x - p.dir * 16 * s, hy - 30 * s, 4 * s, 0, 7); ctx.fill();
+    }
+    ctx.fillStyle = '#2a1a12'; ctx.beginPath(); ctx.arc(x + p.dir * 6 * s, hy + 1, 1.5, 0, 7); ctx.arc(x + p.dir * 11 * s, hy + 1, 1.5, 0, 7); ctx.fill();
+    ctx.restore();
   }
 }
 
@@ -892,7 +962,7 @@ function drawMold(i) {
   } else {
     ctx.fillStyle = 'rgba(255,255,255,.18)';
     ctx.font = '11px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('틀 ' + (i + 1), cx, c.y + 133);
+    ctx.fillText('틀 ' + (i + 1) + (isPC ? ' · ' + 'QWEASD'[i] + ' 키' : ''), cx, c.y + 133);
   }
 }
 
@@ -962,6 +1032,7 @@ function draw() {
   ctx.clearRect(0, 0, W, H);
   drawBackground();
   drawStall();
+  drawWalkers();
   if (!G) { ctx.save(); ctx.translate(0, DY); drawCounter(); ctx.restore(); return; }
   // 손님
   for (let s = 0; s < 3; s++) if (G.customers[s]) drawCustomer(s, G.customers[s]);
@@ -1023,6 +1094,8 @@ let last = performance.now();
 function loop(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   update(dt);
+  stepWalkers(dt);
+  if (window.Street) Street.setSeason(calOf(save.day).month, seasonOf(save.day).snow);
   draw();
   requestAnimationFrame(loop);
 }
@@ -1393,6 +1466,91 @@ $('btnSound').onclick = () => { soundOn = !soundOn; $('btnSound').textContent = 
 document.addEventListener('visibilitychange', () => { if (document.hidden) pauseGame(); });
 
 refreshTitle();
+
+// ===== PC: 키보드 단축키 =====
+// 1~5 재료, Q W E / A S D 틀(누르고 있으면 반죽), 스페이스 = 마지막 틀 덮기·뒤집기·꺼내기, Z X C 손님, P 일시정지
+const MOLD_KEYS = ['q', 'w', 'e', 'a', 's', 'd'];
+const CUST_KEYS = ['z', 'x', 'c'];
+const keyPour = {};
+document.addEventListener('keydown', e => {
+  if (!running || paused || !G) return;
+  const k = e.key.toLowerCase();
+  if (k === 'p' || k === 'escape') { pauseGame(); return; }
+  if (e.repeat) return;
+  if (k >= '1' && k <= '5') {
+    const t = TOOLS[+k - 1];
+    if (t !== 'batter' && !unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '주차부터 팔아요'); return; }
+    tool = t; beep(700, .04, 'sine', .05); return;
+  }
+  const mi = MOLD_KEYS.indexOf(k);
+  if (mi >= 0 && mi < G.molds.length) {
+    lastMold = mi;
+    if (tool === 'batter') { if (startPour(mi)) keyPour[k] = mi; }
+    else addFilling(mi, tool);
+    return;
+  }
+  if (k === ' ') { e.preventDefault(); moldAction(lastMold); return; }
+  const ci = CUST_KEYS.indexOf(k);
+  if (ci >= 0 && G.customers[ci]) serve(ci);
+});
+document.addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if (keyPour[k] !== undefined) { stopPour(keyPour[k]); delete keyPour[k]; }
+});
+
+// ===== PC: 양옆 현황판 =====
+function won(n) { return (n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString() + '원'; }
+function pcRow(a, b, cls) { return `<div class="pcrow ${cls || ''}"><span>${a}</span><b>${b}</b></div>`; }
+function updatePanels() {
+  if (!isPC) return;
+  const se = seasonOf(save.day), c = calOf(save.day);
+  let L = '';
+  L += `<div class="pcbox"><h3>📅 ${c.year}년차</h3><div class="big">${calLabel(save.day)}</div><div class="sub">${se.icon} ${se.name}${se.tag ? ' ' + se.tag : ''} · ${se.line}</div></div>`;
+  let news = '';
+  const cr = save.crisis;
+  if (save.suspended) news += `<div class="pcwarn">🚫 영업정지 1주</div>`;
+  if (cr) { const d = CRISES[cr.id]; news += `<div class="pcwarn">${d.icon} ${d.title} (${cr.left}주 남음)</div><div class="sub">${cr.choice != null ? '대응: ' + d.choices[cr.choice].label : '아침 뉴스에서 대응을 골라요'}</div>`; }
+  if (save.negWeeks > 0) news += `<div class="pcwarn">⚠️ 마이너스 ${save.negWeeks}주째 (4주면 파산)</div>`;
+  L += `<div class="pcbox"><h3>📰 이번 주 소식</h3>${news || '<div class="sub">별일 없는 평화로운 한 주예요.</div>'}</div>`;
+  let shops = pcRow(save.shop ? '🏠 본점 (직접 굽기)' : '🛒 포장마차 (직접 굽기)', save.shop ? '월세 ' + won(RENT) : '월세 없음');
+  for (const b of save.branches) {
+    const a = areaOf(b.area), est = branchWeek(b, save.day, true);
+    shops += pcRow(`${a.icon} ${a.name}점 · ${b.mgr.name} ★${b.mgr.skill}`, (est.net >= 0 ? '+' : '') + won(est.net));
+  }
+  if (save.shop && save.branches.length < BRANCH_COSTS.length) shops += `<div class="sub" style="margin-top:6px">다음 출점 ${won(BRANCH_COSTS[save.branches.length])} · 평점 ★${NEED_RATING.toFixed(1)} 필요</div>`;
+  L += `<div class="pcbox"><h3>🗺️ 내 가게들</h3>${shops}</div>`;
+  L += `<div class="pcbox"><h3>🏆 기록</h3>${pcRow('최고 주간 순이익', won(save.best))}${pcRow('구운 붕어빵', save.total.toLocaleString() + '개')}${save.legacy ? pcRow('장인 비법', 'Lv.' + save.legacy) : ''}</div>`;
+  $('pcLeft').innerHTML = L;
+
+  let R = `<div class="pcbox"><h3>💵 사장님 지갑</h3><div class="big">${won(save.money)}</div><div class="sub">평점 ★${save.rating.toFixed(1)}${save.debt ? ' · 대출 ' + won(save.debt) : ''}</div></div>`;
+  if (G && running) {
+    const st = G.stats;
+    const brs = save.branches.reduce((a, b) => a + branchWeek(b, save.day, true).net, 0);
+    const rent = save.shop ? RENT : 0, intr = Math.round(save.debt * INTEREST);
+    const est = st.revenue + st.tips - st.cost - rent + brs - intr;
+    R += `<div class="pcbox"><h3>💰 이번 주 장부 (진행 중)</h3>${pcRow('매출 + 팁', won(st.revenue + st.tips))}${pcRow('재료비', won(-st.cost))}${rent ? pcRow('본점 월세', won(-rent)) : ''}${save.branches.length ? pcRow('직영점 예상', won(brs)) : ''}${intr ? pcRow('대출 이자', won(-intr)) : ''}${pcRow('예상 순이익', won(est), 'total')}${pcRow('손님 웃음 / 화남', st.happy + ' / ' + st.angry + '명')}</div>`;
+    const need = {};
+    for (const cu of G.customers) if (cu && !cu.leave) for (const t in cu.order) need[t] = (need[t] || 0) + cu.order[t];
+    let ord = '';
+    for (const t of TYPE_KEYS) {
+      if (!unlocked(t)) continue;
+      const n = need[t] || 0, have = trayCount(t);
+      ord += pcRow(TYPES[t].name, `<span class="${n && have < n ? 'no' : 'ok'}">진열 ${have}</span> / 주문 ${n}`);
+    }
+    R += `<div class="pcbox"><h3>📋 주문 현황</h3>${ord}${save.upg.alba ? `<div class="sub" style="margin-top:6px">🧑‍🍳 알바 ${save.upg.alba}명이 5초마다 굽는 중</div>` : ''}</div>`;
+  }
+  R += `<div class="pcbox keys${keysOpen ? ' open' : ''}"><h3>⌨️ 단축키 <span class="sub">${keysOpen ? '(H 닫기)' : '(H 열기)'}</span></h3>
+    <div class="hide"><kbd>1</kbd>~<kbd>5</kbd> 반죽·팥·슈크림·초코·피자</div>
+    <div class="hide"><kbd>Q</kbd><kbd>W</kbd><kbd>E</kbd> <kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> 틀 (누르고 있으면 반죽)</div>
+    <div class="hide"><kbd>Space</kbd> 덮기·뒤집기·꺼내기 (마지막 틀)</div>
+    <div class="hide"><kbd>Z</kbd><kbd>X</kbd><kbd>C</kbd> 손님에게 건네기</div>
+    <div class="hide"><kbd>P</kbd> 잠깐 쉬기</div></div>`;
+  $('pcRight').innerHTML = R;
+}
+let keysOpen = false;
+$('pcRight').addEventListener('click', e => { if (e.target.closest('.keys h3')) { keysOpen = !keysOpen; updatePanels(); } });
+document.addEventListener('keydown', e => { if (e.key.toLowerCase() === 'h' && isPC) { keysOpen = !keysOpen; updatePanels(); } });
+setInterval(updatePanels, 300);
 
 // 시험용
 window.__bungeo = { get G() { return G; }, save: () => save, openNews, setSave: o => { Object.assign(save, o); persist(); }, startDay, moldAction, startPour, stopPour, addFilling, serve, setTool: t => tool = t, endDay };

@@ -5,8 +5,34 @@ html, body {
   overflow: hidden; overscroll-behavior: none;
   -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
 }
-#wrap { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+#street { position: fixed; inset: 0; display: none; z-index: 0; }
+#wrap { position: fixed; inset: 0; z-index: 1; display: flex; align-items: center; justify-content: center; }
 canvas { display: block; touch-action: none; }
+
+/* PC 넓은 화면: 양옆 현황판 */
+.pcside { display: none; }
+body.pc #wrap { justify-content: space-between; padding: 0 16px; }
+body.pc #game { box-shadow: 0 0 0 4px #3a2414, 0 0 40px rgba(255,190,90,.35), 0 20px 50px rgba(0,0,0,.6); border-radius: 6px; }
+body.pc .pcside {
+  display: flex; align-self: flex-start; margin-top: 2vh; flex-direction: column; gap: 12px; width: 300px; max-height: 96vh; overflow-y: auto;
+  color: #f6e6c8; font-size: 14px;
+}
+.pcbox { background: rgba(14,16,38,.78); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); box-shadow: 0 6px 20px rgba(0,0,0,.35); border: 1px solid rgba(255,207,90,.3); border-radius: 16px; padding: 14px 16px; }
+.pcbox h3 { margin: 0 0 8px; font-size: 15px; color: #ffcf5a; }
+.pcbox .big { font-size: 26px; font-weight: 800; color: #fff; }
+.pcbox .sub { color: #c9b89a; font-size: 13px; }
+.pcrow { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dashed rgba(255,255,255,.1); }
+.pcrow:last-child { border-bottom: 0; }
+.pcrow b { color: #fff; }
+.pcrow.total b { color: #ffe27a; font-size: 16px; }
+.pcrow .ok { color: #8fe08a; } .pcrow .no { color: #ff9a80; }
+.pcwarn { color: #ffb08a; }
+kbd { display: inline-block; min-width: 20px; padding: 1px 6px; margin: 0 1px; border-radius: 5px; background: #3a2414; border: 1px solid #7a4a26; color: #fff; font: 12px/1.5 inherit; text-align: center; }
+.keys div { padding: 3px 0; }
+.keys .hide { display: none; }
+.keys.open .hide { display: block; }
+.keys h3 { cursor: pointer; margin-bottom: 0; }
+.keys.open h3 { margin-bottom: 8px; }
 
 .overlay {
   position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
