@@ -201,11 +201,10 @@ function addFilling(i, t) {
   const m = G.molds[i];
   if (!unlocked(t)) { say(TYPES[t].name + ' 붕어빵은 ' + TYPES[t].unlock + '일차부터 팔아요'); return; }
   if (m.state === 'empty') { say('먼저 반죽을 절반쯤 부어요'); sfx.bad(); return; }
-  if (m.state !== 'pour1') { say(m.filling ? '이미 속을 넣었어요' : '이제는 속을 넣을 수 없어요'); return; }
+  if (m.state !== 'pour1') { say(m.filling ? '이미 속을 넣었어요. 반죽 주전자를 골라 마저 부어요' : '이제는 속을 넣을 수 없어요'); return; }
   m.filling = t; m.fill1 = m.fill; m.state = 'filled';
   G.stats.cost += TYPES[t].cost;
   sfx.pop();
-  tool = 'batter';
 }
 
 function moldAction(i) {
@@ -794,7 +793,7 @@ function hintFor(m) {
   switch (m.state) {
     case 'empty': return '① 반죽 주전자로 틀을 꾹 눌러 절반쯤 부어요';
     case 'pour1': return m.fill < ZONE1[0] ? '① 초록 칸까지 반죽을 부어요' : '② 아래에서 속(팥·슈크림…)을 골라 틀을 톡!';
-    case 'filled': return '③ 반죽 주전자로 가득(초록 칸)까지 마저 부어요';
+    case 'filled': return tool === 'batter' ? '③ 가득(초록 칸)까지 마저 부어요' : '③ 아래 반죽 주전자를 골라 마저 부어요';
     case 'pour2': return m.fill < ZONE2[0] ? '③ 초록 칸까지 마저 부어요' : '④ 덮기를 눌러요';
     case 'closedA': return m.dA < DONE_LO ? '⑤ 아랫면 익는 중… 초록 칸에서 뒤집기' : '⑤ 지금 뒤집기!';
     case 'closedB': return m.dB < DONE_LO ? '⑥ 윗면 익는 중… 초록 칸에서 꺼내기' : '⑥ 지금 꺼내기!';
