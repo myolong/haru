@@ -28,11 +28,12 @@ const UPGRADES = [
   { key: 'molds', icon: '🐟', name: '붕어빵 틀 추가', desc: '한 번에 구울 수 있는 틀이 1개 늘어요.', max: 3, costs: [6000, 14000, 26000] },
   { key: 'fire',  icon: '🔥', name: '화력 강화', desc: '더 빨리 익어요. (타는 것도 빨라져요!)', max: 3, costs: [5000, 11000, 20000] },
   { key: 'heater',icon: '♨️', name: '손님 난로', desc: '손님이 15% 더 오래 기다려 줘요.', max: 3, costs: [4000, 9000, 16000] },
+  { key: 'alba',  icon: '🧑‍🍳', name: '알바생 고용', desc: '5초마다 붕어빵 1개를 구워 진열대에 올려요. (별 2개, 재료비 있음)', max: 3, costs: [8000, 16000, 30000] },
   { key: 'sign',  icon: '🏮', name: '간판 새로 달기', desc: '붕어빵 값 +10%, 손님이 조금 더 자주 와요.', max: 3, costs: [7000, 15000, 28000] },
 ];
 
 // ===== 저장 =====
-let save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0 }, best: 0, total: 0 };
+let save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0 }, best: 0, total: 0 };
 try {
   const s = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
   if (s && s.day) save = Object.assign(save, s, { upg: Object.assign(save.upg, s.upg || {}) });
@@ -105,7 +106,7 @@ function newMold() {
 
 function startDay() {
   G = {
-    t: 0, molds: [], tray: [], customers: [null, null, null], nextCust: 5,
+    t: 0, molds: [], tray: [], customers: [null, null, null], nextCust: 5, albaT: 0,
     floats: [], stats: { sold: 0, revenue: 0, tips: 0, cost: 0, happy: 0, angry: 0, burnt: 0, waste: 0, starSum: 0 },
     pointers: {}, closing: false, msg: '', msgT: 0, smoke: [],
   };
@@ -372,6 +373,14 @@ function update(dt) {
       G.smoke.push({ x: c.x + 40 + Math.random() * 48, y: c.y + 60, t: 0, steam: true });
     }
   });
+  // 알바생: 5초마다 한 명당 1개씩 구움
+  if (save.upg.alba > 0 && !G.closing) {
+    G.albaT += dt;
+    if (G.albaT >= 5) {
+      G.albaT -= 5;
+      for (let k = 0; k < save.upg.alba; k++) albaBake();
+    }
+  }
   G.smoke = G.smoke.filter(s => (s.t += dt) < 1.6);
   G.floats = G.floats.filter(f => (f.t += dt) < 1.4);
   if (G.msgT > 0) G.msgT -= dt;
@@ -382,6 +391,19 @@ function update(dt) {
     for (const p in G.pointers) stopPour(G.pointers[p]);
   }
   if (G.closing && (G.customers.every(c => !c) || G.t >= DAY_LEN + 12)) endDay();
+}
+
+// 알바생이 구울 맛: 기다리는 손님에게 모자란 맛 먼저
+function albaBake() {
+  if (G.tray.length >= 16) return;
+  const need = {};
+  for (const c of G.customers) if (c && !c.leave) for (const t in c.order) need[t] = (need[t] || 0) + c.order[t];
+  let pick = null, gap = 0;
+  for (const t in need) { const g = need[t] - trayCount(t); if (g > gap) { gap = g; pick = t; } }
+  if (!pick) { const av = TYPE_KEYS.filter(unlocked); pick = av[Math.random() * av.length | 0]; }
+  G.tray.push({ type: pick, stars: 2, alba: true });
+  G.stats.cost += BATTER_COST + TYPES[pick].cost;
+  float(W / 2, 290 + DY - 40, '알바생: ' + TYPES[pick].name + ' 1개!', '#bfe8ff');
 }
 
 // ===== 그리기 =====
@@ -837,12 +859,19 @@ function draw() {
   ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   ctx.fillText(save.day + '일차', 12, 22);
   const left = Math.max(0, DAY_LEN - G.t);
-  ctx.fillStyle = 'rgba(255,255,255,.2)'; rr(70, 16, 120, 12, 6); ctx.fill();
-  ctx.fillStyle = left < 15 ? '#ef5a3a' : '#ffcf5a'; rr(70, 16, 120 * left / DAY_LEN, 12, 6); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.2)'; rr(64, 16, 96, 12, 6); ctx.fill();
+  ctx.fillStyle = left < 15 ? '#ef5a3a' : '#ffcf5a'; rr(64, 16, 96 * left / DAY_LEN, 12, 6); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
-  ctx.fillText(G.closing ? '마감' : Math.ceil(left) + '초', 196, 22);
+  ctx.fillText(G.closing ? '마감' : Math.ceil(left) + '초', 165, 22);
   ctx.textAlign = 'right'; ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = '#ffe27a';
   ctx.fillText((G.stats.revenue + G.stats.tips).toLocaleString() + '원', W - 58, 22);
+  // 알바생 표시
+  if (save.upg.alba > 0) {
+    ctx.fillStyle = 'rgba(255,255,255,.15)'; rr(200, 10, 60, 24, 12); ctx.fill();
+    ctx.fillStyle = '#bfe8ff'; rr(200, 10, 60 * Math.min(1, G.albaT / 5), 24, 12); ctx.globalAlpha = .35; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('알바 ' + save.upg.alba + '명', 230, 22);
+  }
   // 일시정지 버튼
   ctx.fillStyle = 'rgba(255,255,255,.18)'; rr(W - 48, 8, 40, 28, 8); ctx.fill();
   ctx.fillStyle = '#fff'; ctx.fillRect(W - 34, 15, 4, 14); ctx.fillRect(W - 26, 15, 4, 14);
@@ -892,7 +921,7 @@ $('btnReset').onclick = () => {
     return;
   }
   clearTimeout(resetTimer);
-  save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0 }, best: 0, total: 0 };
+  save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0, alba: 0 }, best: 0, total: 0 };
   persist();
   refreshTitle();
   sfx.pop();
