@@ -452,11 +452,24 @@ function takeOut(i) {
     G.tray.push({ type: m.filling, stars: r.stars, dA: m.dA, dB: m.dB, raw: r.raw });
     save.total++;
     float(fx, fy - 30, '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars), '#ffe27a');
-    if (r.raw) say('덜 익었어요! 팔면 손님이 배탈 나요 (합의금 ' + SETTLE.toLocaleString() + '원)', 2.4);
+    if (r.raw) say('덜 익었어요! 진열대를 눌러 버려요 (팔면 배탈 합의금 3만원)', 2.8);
     else if (r.notes.length) say(r.notes.slice(0, 2).join(', '), 1.6);
     sfx.pop();
   }
   G.molds[i] = newMold();
+}
+
+// 진열대에서 버리기: 덜 익은(🤢) 것이 있으면 그것 모두, 없으면 별이 가장 적은 1개
+function discardTray(t) {
+  const list = G.tray.filter(b => b.type === t);
+  if (!list.length) return;
+  const raw = list.filter(b => b.raw);
+  const out = raw.length ? raw : [list.sort((a, b) => a.stars - b.stars)[0]];
+  for (const b of out) G.tray.splice(G.tray.indexOf(b), 1);
+  G.stats.waste += out.length;
+  say(raw.length ? '덜 익은 ' + TYPES[t].name + ' 붕어빵 ' + raw.length + '개를 버렸어요' : TYPES[t].name + ' 붕어빵 1개를 버렸어요 (별 ' + out[0].stars + '개)', 1.8);
+  float(14 + TYPE_KEYS.indexOf(t) * 96 + 46, 250 + DY, '🗑️ −' + out.length, '#ffb0a0');
+  sfx.bad();
 }
 
 // ===== 입력 =====
@@ -477,6 +490,10 @@ cv.addEventListener('pointerdown', e => {
     if (G.customers[s] && inR(p, CUST_X[s] - 62, 60, 124, 200 + DY - 60)) { serve(s); return; }
   }
   const q = { x: p.x, y: p.y - DY };
+  // 진열대: 누르면 덜 익은 것부터 버려요
+  for (let i = 0; i < TYPE_KEYS.length; i++) {
+    if (inR(q, 10 + i * 96, 240, 94, 56)) { discardTray(TYPE_KEYS[i]); return; }
+  }
   // 도구
   for (let i = 0; i < TOOLS.length; i++) {
     const r = toolRect(i);
@@ -901,7 +918,12 @@ function drawTray() {
     ctx.font = 'bold 16px sans-serif'; ctx.fillStyle = n ? '#ffe27a' : 'rgba(255,255,255,.5)';
     ctx.fillText(lock ? '🔒' : '×' + n, x + 44, y + 36);
     const rawN = G ? G.tray.filter(q => q.type === t && q.raw).length : 0;
-    if (rawN) { ctx.font = 'bold 11px sans-serif'; ctx.fillStyle = '#ff9a80'; ctx.fillText('🤢' + rawN, x + 70, y + 37); }
+    if (rawN) {
+      const pulse = .75 + .25 * Math.sin(performance.now() / 180);
+      ctx.globalAlpha = pulse; ctx.fillStyle = '#d63a2a'; rr(x + 62, y + 2, 30, 18, 9); ctx.fill(); ctx.globalAlpha = 1;
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('🤢' + rawN, x + 77, y + 11.5);
+    }
     ctx.globalAlpha = 1;
   });
 }
