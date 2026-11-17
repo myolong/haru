@@ -35,6 +35,8 @@ button.big:active { transform: translateY(3px); box-shadow: 0 1px 0 #8f2f0b; }
 button.gold { background: #e9a514; box-shadow: 0 4px 0 #9a6a05; }
 button.ghost { padding: 10px; font-size: 15px; background: #f3dfbd; color: #6b4022; }
 button:disabled { opacity: .45; }
+button.reset { background: transparent; color: #a0623a; font-size: 13px; text-decoration: underline; }
+button.reset.armed { background: #f7d2c4; color: #b3361a; text-decoration: none; }
 ol { padding-left: 20px; margin: 0 0 10px; font-size: 14.5px; line-height: 1.6; }
 ol li { margin-bottom: 6px; }
 .zone { background: #bfe8a6; border-radius: 4px; padding: 0 3px; }

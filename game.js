@@ -875,7 +875,28 @@ function refreshTitle() {
     ? `<b>${save.day}일차</b> · 가진 돈 <b>${save.money.toLocaleString()}원</b><br>지금까지 구운 붕어빵 ${save.total.toLocaleString()}개`
     : '반죽 붓고, 속 넣고, 뒤집고, 꺼내고!<br>오늘부터 붕어빵 가게 사장님이에요.';
   $('btnStart').textContent = save.day > 1 ? save.day + '일차 장사 시작' : '장사 시작';
+  const rb = $('btnReset');
+  rb.style.display = (save.day > 1 || save.total > 0 || save.money) ? 'block' : 'none';
+  rb.classList.remove('armed'); rb.textContent = '처음부터 다시 시작';
 }
+
+// 처음부터 다시 시작: 실수 방지로 두 번 눌러야 지워짐
+let resetTimer = null;
+$('btnReset').onclick = () => {
+  const rb = $('btnReset');
+  if (!rb.classList.contains('armed')) {
+    rb.classList.add('armed');
+    rb.textContent = '한 번 더 누르면 1일차부터 시작해요';
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(refreshTitle, 4000);
+    return;
+  }
+  clearTimeout(resetTimer);
+  save = { day: 1, money: 0, upg: { molds: 0, fire: 0, heater: 0, sign: 0 }, best: 0, total: 0 };
+  persist();
+  refreshTitle();
+  sfx.pop();
+};
 
 let lastResult = null, bonusUsed = false;
 function endDay() {
