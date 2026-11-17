@@ -341,11 +341,12 @@ function evaluate(m) {
   if (!m.filling) return { plain: true };
   if (m.dA > BURN || m.dB > BURN) return { burnt: true };
   const f1 = m.fill1, f2 = m.fill;
+  // 팔 수 없는 실수: 반죽 넘침, 속이 드러날 만큼 반죽이 모자람
+  if (f2 > 108) return { spoiled: '반죽이 넘쳐 모양이 망가졌어요… 버려야 해요', tag: '넘쳤어요' };
+  if (f2 < 75) return { spoiled: '반죽이 모자라 속이 다 보여요… 버려야 해요', tag: '속이 보여요' };
   if (f1 < ZONE1[0] - 12 || f1 > ZONE1[1] + 12) { score -= 15; notes.push(f1 < ZONE1[0] ? '속이 바닥에 붙음' : '속이 위로 뜸'); }
   else if (f1 < ZONE1[0] || f1 > ZONE1[1]) score -= 6;
-  if (f2 < 75) { score -= 25; notes.push('반죽이 모자람'); }
-  else if (f2 < ZONE2[0]) score -= 8;
-  else if (f2 > 108) { score -= 20; notes.push('반죽이 넘침'); }
+  if (f2 < ZONE2[0]) score -= 8;
   else if (f2 > ZONE2[1]) score -= 5;
   for (const d of [m.dA, m.dB]) {
     if (d < 0.5) { score -= 40; notes.push('설익음'); }
@@ -364,6 +365,9 @@ function takeOut(i) {
   if (r.burnt) {
     G.stats.burnt++; say('앗, 새까맣게 탔어요… 버려야 해요'); sfx.bad();
     float(fx, fy - 30, '탔어요 🔥', '#ff8a6a');
+  } else if (r.spoiled) {
+    G.stats.waste++; say(r.spoiled); sfx.bad();
+    float(fx, fy - 30, r.tag, '#ffb0a0');
   } else if (r.plain) {
     G.stats.waste++; say('앙꼬 없는 붕어빵은 팔 수 없어요'); sfx.bad();
     float(fx, fy - 30, '속이 없어요', '#ffb0a0');
@@ -471,7 +475,7 @@ function update(dt) {
   G.molds.forEach((m, i) => {
     if (m.pouring && canPour(m)) {
       m.fill = Math.min(125, m.fill + POUR_RATE * dt);
-      if (m.fill > 108 && !m.overflow) { m.overflow = true; say('반죽이 넘쳐요!'); }
+      if (m.fill > 108 && !m.overflow) { m.overflow = true; say('반죽이 넘쳤어요! 이건 팔 수 없어요'); }
     }
     if (m.cooking) {
       if (m.state === 'closedB') m.dB += COOK_BASE * fire * dt;
