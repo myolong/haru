@@ -21,7 +21,7 @@
       <div id="titleInfo" class="info"></div>
       <button id="btnStart" class="big">장사 시작</button>
       <button id="btnHow" class="ghost">굽는 방법</button>
-      <button id="btnShop0" class="ghost">가게 꾸미기(업그레이드)</button>
+      <button id="btnShop0" class="ghost">사장님 책상 (업그레이드·확장·은행)</button>
       <button id="btnReset" class="ghost reset">처음부터 다시 시작</button>
     </div>
   </div>
@@ -62,18 +62,29 @@
       <table id="resTable"></table>
       <div id="resNote" class="small"></div>
       <button id="btnBonus" class="big gold">순이익 2배 받기</button>
-      <button id="btnToShop" class="big">가게 업그레이드</button>
+      <button id="btnToShop" class="big">사장님 책상</button>
     </div>
   </div>
 
   <!-- 상점 -->
   <div id="shop" class="overlay">
     <div class="panel left">
-      <h2>가게 업그레이드</h2>
+      <h2>사장님 책상</h2>
       <div class="money">가진 돈 <b id="shopMoney">0</b>원</div>
+      <div id="shopTabs" class="tabs"><button data-tab="upg" class="on">업그레이드</button><button data-tab="map">가게 확장</button><button data-tab="bank">은행</button></div>
       <div id="shopList"></div>
       <button id="btnNextDay" class="big">다음 주 장사 준비</button>
       <button id="btnShopBack" class="ghost">첫 화면</button>
+    </div>
+  </div>
+
+  <!-- 파산 -->
+  <div id="bankrupt" class="overlay">
+    <div class="panel">
+      <div class="logo">💸</div>
+      <h2>파산했어요…</h2>
+      <p id="bkText" class="info"></p>
+      <button id="btnRestart" class="big">포장마차부터 다시</button>
     </div>
   </div>
 
